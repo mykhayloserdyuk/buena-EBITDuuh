@@ -42,6 +42,31 @@ def read_minio_object(bucket: str, key: str) -> tuple[bytes, str | None]:
     return raw, response.get("ETag", "").strip('"') or None
 
 
+def minio_prefix_exists(bucket: str, prefix: str) -> bool:
+    client = get_minio_client()
+    try:
+        response = client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not list MinIO objects: {exc}") from exc
+    return response.get("KeyCount", 0) > 0
+
+
+def list_minio_object_keys(bucket: str, prefix: str) -> list[str]:
+    client = get_minio_client()
+    keys: list[str] = []
+    paginator = client.get_paginator("list_objects_v2")
+    try:
+        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        for page in pages:
+            for item in page.get("Contents", []):
+                key = item["Key"]
+                if not key.endswith("/"):
+                    keys.append(key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not list MinIO objects: {exc}") from exc
+    return keys
+
+
 def list_minio_objects(bucket: str, prefix: str, limit: int) -> dict:
     client = get_minio_client()
     objects: list[dict] = []
