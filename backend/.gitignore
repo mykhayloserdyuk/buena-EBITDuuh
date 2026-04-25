@@ -1,4 +1,5 @@
 .env
+.env.local
 credentials.json
 
 # Byte-compiled / optimized / DLL files
