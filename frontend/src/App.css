@@ -1,0 +1,85 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f5f5;
+  color: #1a1a1a;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+header {
+  margin-bottom: 2.5rem;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 1.25rem;
+  background: #fff;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.card:hover {
+  border-color: #ccc;
+}
+
+.card.active {
+  border-color: #1a1a1a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.icon {
+  font-size: 1.5rem;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.folder {
+  font-size: 0.8rem;
+  color: #999;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
+.detail {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
