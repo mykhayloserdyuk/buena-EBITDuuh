@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
 
+import boto3
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
@@ -74,6 +75,13 @@ class IngestLocalRequest(BaseModel):
     collection: str = DEFAULT_COLLECTION
 
 
+class IngestMinioRequest(BaseModel):
+    key: str = Field(..., description="Object key in the MinIO bucket, for example raw-data/rechnungen/...")
+    bucket: str = Field(default="raw-data")
+    schema_hint: str | None = None
+    collection: str = DEFAULT_COLLECTION
+
+
 class IngestResponse(BaseModel):
     collection: str
     id: str
@@ -81,6 +89,19 @@ class IngestResponse(BaseModel):
     matched_count: int
     modified_count: int
     extraction: ExtractResponse
+
+
+class MinioObject(BaseModel):
+    bucket: str
+    key: str
+    size_bytes: int
+    etag: str | None = None
+
+
+class MinioListResponse(BaseModel):
+    bucket: str
+    prefix: str
+    objects: list[MinioObject]
 
 
 app = FastAPI(title="Buena EBITDuuh Extractor", version="0.1.0")
@@ -115,6 +136,21 @@ def _get_mongo_collection(name: str):
     client = MongoClient(_get_mongo_uri(), serverSelectionTimeoutMS=8000)
     db = client[_get_mongo_database()]
     return db[name]
+
+
+def _get_minio_client():
+    endpoint = os.getenv("MINIO_ENDPOINT")
+    user = os.getenv("MINIO_USER")
+    password = os.getenv("MINIO_PASS")
+    if not endpoint or not user or not password:
+        raise HTTPException(status_code=503, detail="Set MINIO_ENDPOINT, MINIO_USER, and MINIO_PASS.")
+    return boto3.client(
+        "s3",
+        endpoint_url=f"http://{endpoint}",
+        aws_access_key_id=user,
+        aws_secret_access_key=password,
+        region_name=os.getenv("MINIO_REGION", "us-east-1"),
+    )
 
 
 def _build_chain() -> Any:
@@ -207,13 +243,26 @@ def _resolve_local_path(path: str) -> Path:
     return resolved
 
 
-def _source_metadata(filename: str, raw: bytes, local_path: Path | None = None) -> dict[str, Any]:
+def _source_metadata(
+    filename: str,
+    raw: bytes,
+    local_path: Path | None = None,
+    minio_bucket: str | None = None,
+    minio_key: str | None = None,
+    minio_etag: str | None = None,
+) -> dict[str, Any]:
     metadata: dict[str, Any] = {
         "filename": filename,
         "sha256": hashlib.sha256(raw).hexdigest(),
         "size_bytes": len(raw),
     }
-    if local_path:
+    if minio_bucket and minio_key:
+        metadata["type"] = "minio"
+        metadata["bucket"] = minio_bucket
+        metadata["key"] = minio_key
+        if minio_etag:
+            metadata["etag"] = minio_etag
+    elif local_path:
         try:
             metadata["path"] = str(local_path.relative_to(REPO_ROOT))
             metadata["type"] = "local_file"
@@ -265,11 +314,26 @@ def _ingest_raw_bytes(
     schema_hint: str | None,
     collection: str,
     local_path: Path | None = None,
+    source: dict[str, Any] | None = None,
 ) -> IngestResponse:
     content = _decode_upload(filename, content_type, raw)
     extraction = _extract_with_llm(content, filename, schema_hint)
-    source = _source_metadata(filename, raw, local_path)
+    if source is None:
+        source = _source_metadata(filename, raw, local_path)
     return _persist_extraction(collection_name=collection, source=source, extraction=extraction)
+
+
+def _read_minio_object(bucket: str, key: str) -> tuple[bytes, str | None]:
+    client = _get_minio_client()
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Could not read MinIO object {bucket}/{key}: {exc}") from exc
+    try:
+        raw = response["Body"].read()
+    finally:
+        response["Body"].close()
+    return raw, response.get("ETag", "").strip('"') or None
 
 
 @app.get("/health")
@@ -320,4 +384,54 @@ def ingest_local(request: IngestLocalRequest) -> IngestResponse:
         schema_hint=request.schema_hint,
         collection=request.collection,
         local_path=path,
+    )
+
+
+@app.get("/minio/objects", response_model=MinioListResponse)
+def list_minio_objects(
+    bucket: str = "raw-data",
+    prefix: str = "",
+    limit: int = 25,
+) -> MinioListResponse:
+    client = _get_minio_client()
+    objects: list[MinioObject] = []
+    paginator = client.get_paginator("list_objects_v2")
+    try:
+        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        for page in pages:
+            for item in page.get("Contents", []):
+                objects.append(
+                    MinioObject(
+                        bucket=bucket,
+                        key=item["Key"],
+                        size_bytes=item["Size"],
+                        etag=item.get("ETag", "").strip('"') or None,
+                    )
+                )
+                if len(objects) >= limit:
+                    return MinioListResponse(bucket=bucket, prefix=prefix, objects=objects)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not list MinIO objects: {exc}") from exc
+    return MinioListResponse(bucket=bucket, prefix=prefix, objects=objects)
+
+
+@app.post("/ingest/minio", response_model=IngestResponse)
+def ingest_minio(request: IngestMinioRequest) -> IngestResponse:
+    raw, etag = _read_minio_object(request.bucket, request.key)
+    filename = Path(request.key).name
+    content_type = "application/pdf" if filename.lower().endswith(".pdf") else None
+    source = _source_metadata(
+        filename=filename,
+        raw=raw,
+        minio_bucket=request.bucket,
+        minio_key=request.key,
+        minio_etag=etag,
+    )
+    return _ingest_raw_bytes(
+        raw=raw,
+        filename=filename,
+        content_type=content_type,
+        schema_hint=request.schema_hint,
+        collection=request.collection,
+        source=source,
     )

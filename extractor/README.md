@@ -11,6 +11,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 export GOOGLE_API_KEY="your-google-api-key"
 export MONGO_URI="mongodb://user:password@host:27017/buena?authSource=admin"
+export MINIO_ENDPOINT="host:9000"
+export MINIO_USER="user"
+export MINIO_PASS="password"
 uvicorn extractor:app --reload
 ```
 
@@ -53,4 +56,18 @@ Upload and ingest one file into MongoDB:
 ```sh
 curl -X POST http://127.0.0.1:8000/ingest/file \
   -F 'file=@../raw-data/rechnungen/2024-01/20240106_DL-010_INV-00001.pdf'
+```
+
+List MinIO objects:
+
+```sh
+curl 'http://127.0.0.1:8000/minio/objects?bucket=raw-data&prefix=rechnungen/2024-01/&limit=5'
+```
+
+Ingest one MinIO object into MongoDB:
+
+```sh
+curl -X POST http://127.0.0.1:8000/ingest/minio \
+  -H 'Content-Type: application/json' \
+  -d '{"bucket":"raw-data","key":"rechnungen/2024-01/20240106_DL-010_INV-00001.pdf"}'
 ```
