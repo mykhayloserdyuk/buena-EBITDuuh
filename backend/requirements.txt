@@ -1,4 +1,11 @@
 aenum==3.1.17
+docling
+langchain-docling
+pdfplumber
+pypdf
+pymupdf
+python-docx
+python-multipart
 aiobotocore==3.5.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
