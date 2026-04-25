@@ -98,6 +98,25 @@ resource "kubernetes_namespace" "buena" {
 # MinIO — blob / object storage
 # ---------------------------------------------------------------------------
 
+resource "kubernetes_persistent_volume_claim" "minio" {
+  metadata {
+    name      = "minio-data"
+    namespace = kubernetes_namespace.buena.metadata[0].name
+  }
+
+  wait_until_bound = false
+
+  spec {
+    access_modes = ["ReadWriteOnce"]
+
+    resources {
+      requests = {
+        storage = "10Gi"
+      }
+    }
+  }
+}
+
 resource "kubernetes_secret" "minio_credentials" {
   metadata {
     name      = "minio-credentials"
@@ -173,7 +192,9 @@ resource "kubernetes_deployment" "minio" {
 
         volume {
           name = "data"
-          empty_dir {}
+          persistent_volume_claim {
+            claim_name = kubernetes_persistent_volume_claim.minio.metadata[0].name
+          }
         }
       }
     }
@@ -207,6 +228,25 @@ resource "kubernetes_service" "minio" {
 # ---------------------------------------------------------------------------
 # MongoDB standalone
 # ---------------------------------------------------------------------------
+
+resource "kubernetes_persistent_volume_claim" "mongo" {
+  metadata {
+    name      = "mongo-data"
+    namespace = kubernetes_namespace.buena.metadata[0].name
+  }
+
+  wait_until_bound = false
+
+  spec {
+    access_modes = ["ReadWriteOnce"]
+
+    resources {
+      requests = {
+        storage = "10Gi"
+      }
+    }
+  }
+}
 
 resource "kubernetes_secret" "mongo_credentials" {
   metadata {
@@ -277,7 +317,9 @@ resource "kubernetes_deployment" "mongo" {
 
         volume {
           name = "data"
-          empty_dir {}
+          persistent_volume_claim {
+            claim_name = kubernetes_persistent_volume_claim.mongo.metadata[0].name
+          }
         }
       }
     }
