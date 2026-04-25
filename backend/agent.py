@@ -1,66 +1,111 @@
 import json
-import os
-from pathlib import Path
+import logging
 
-from dotenv import load_dotenv
-from pymongo import MongoClient
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
+from llm import make_llm
+from db import _db
 
-load_dotenv(Path(__file__).parent / ".env")
-
-_PROVIDER = os.environ["MODEL_PROVIDER"].upper()
-
-if _PROVIDER == "GEMINI":
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    _llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=1.0)
-elif _PROVIDER == "PRIVATE":
-    from gen_ai_hub.proxy.langchain.init_models import init_llm
-
-    _llm = init_llm("gpt-5", temperature=0, max_tokens=32000)
-else:
-    raise ValueError(f"Unknown MODEL_PROVIDER: {_PROVIDER}")
-
-_db = MongoClient("mongodb://localhost:27017")["buena"]
-
-_SCHEMA = {
-    "entity_types": list(_db["entity_types"].find()),
-    "interaction_types": list(_db["interaction_types"].find()),
-}
+logger = logging.getLogger(__name__)
 
 
+# Wie viele Mieteinnahmen werde ich nächstes Jahr machen mit meinem Haus? => Chart mit monatlichen Einnahmen
+# Zeige mir den Emailverlauf zwischen Vermieter A und Mieter X => Markdown like mit Emails 
+# Welche offenen Items habe ich für Haus, Wohnung etc.? => To do liste mit offenen Items, z.B. "Rechnung von Handwerker Y bezahlen", "Mieter Z wegen Lärm beschweren", etc.
 @tool
 def query(command_json: str) -> str:
-    """Execute a raw MongoDB command using the official MongoDB Query Language.
-    command_json: a MongoDB command document as JSON, passed directly to db.command().
+    """Read data from MongoDB. Use for find, aggregate, count, distinct.
 
     Examples:
       {"find": "entities", "filter": {"type": "mieter"}, "limit": 10}
-      {"find": "entities", "filter": {}, "projection": {"vorname": 1, "nachname": 1}, "sort": {"nachname": 1}}
-      {"count": "entities", "query": {"type": "mieter"}}
-      {"aggregate": "interactions", "pipeline": [{"$match": {"done": false}}, {"$group": {"_id": "$type", "n": {"$sum": 1}}}], "cursor": {}}
+      {"find": "interactions", "filter": {"done": false}, "sort": {"date": -1}, "limit": 20}
+      {"aggregate": "interactions", "pipeline": [{"$match": {"type": "rechnung"}}, {"$lookup": {"from": "entities", "localField": "entity_ids", "foreignField": "_id", "as": "entities"}}], "cursor": {}}
+      {"count": "entities", "query": {"type": "eigentuemer"}}
+      {"distinct": "entities", "key": "type", "query": {}}
     """
     try:
-        return json.dumps(_db.command(json.loads(command_json)), default=str)
+        result = _db.command(json.loads(command_json))
+        logger.debug("query result: %s", str(result)[:200])
+        return json.dumps(result, default=str, ensure_ascii=False)
     except Exception as e:
+        logger.warning("query error: %s", e)
         return f"QueryError: {e}"
 
 
-_SYSTEM = f"""You are a helpful assistant for Buena, a property management company.
-You query their MongoDB database by writing raw MongoDB commands via the query tool.
-If a query returns a QueryError, fix and retry.
+@tool
+def mutate(command_json: str) -> str:
+    """Write to MongoDB. Use for insert, update, delete operations.
 
-Database schema:
-{json.dumps(_SCHEMA, indent=2, default=str)}
+    Insert a new entity:
+      {"insert": "entities", "documents": [{"_id": "DL-017", "type": "dienstleister", "firma": "Neue GmbH", "email": "info@neue.de"}]}
 
-Entity IDs: dienstleister=DL-*, eigentuemer=EIG-*, einheit=EIN-*, mieter=MIE-*
-Interaction fields: _id, type, date (ISO string), description, original, done (bool), entity_ids.
-After every tool call, always write a clear text answer summarizing the results for the user.
-Answer in the same language the user writes in."""
+    Upsert / patch an existing entity:
+      {"update": "entities", "updates": [{"q": {"_id": "DL-001"}, "u": {"$set": {"email": "new@email.de"}}, "upsert": false}]}
+
+    Register a new entity_type:
+      {"insert": "entity_types", "documents": [{"_id": "versorger", "attributes": ["firma", "email", "telefon"]}]}
+
+    Extend an entity_type with new attributes:
+      {"update": "entity_types", "updates": [{"q": {"_id": "dienstleister"}, "u": {"$addToSet": {"attributes": {"$each": ["rating", "notizen"]}}}}]}
+
+    Register a new interaction_type:
+      {"insert": "interaction_types", "documents": [{"_id": "kuendigung"}]}
+
+    Create a new interaction:
+      {"insert": "interactions", "documents": [{"_id": "KUND-00001", "type": "kuendigung", "date": "2026-04-25", "description": "...", "original": "", "done": false, "entity_ids": ["MIE-003"]}]}
+
+    Mark interaction as done:
+      {"update": "interactions", "updates": [{"q": {"_id": "EMAIL-06547"}, "u": {"$set": {"done": true}}}]}
+
+    Delete a document:
+      {"delete": "interactions", "deletes": [{"q": {"_id": "EMAIL-99999"}, "limit": 1}]}
+    """
+    try:
+        result = _db.command(json.loads(command_json))
+        logger.info("mutate result: %s", str(result)[:200])
+        return json.dumps(result, default=str, ensure_ascii=False)
+    except Exception as e:
+        logger.warning("mutate error: %s", e)
+        return f"MutateError: {e}"
+
+
+_SYSTEM = """You are a helpful assistant for Buena, a property management company.
+You have full read/write access to their MongoDB database via the `query` and `mutate` tools.
+
+## Data model
+- entity_types: {{_id: type_name, attributes: [...]}} — schema registry
+- interaction_types: {{_id: type_name}} — event type registry
+- entities: {{_id, type, ...dynamic top-level attributes}} — people, companies, properties
+- interactions: {{_id, type, date (ISO), description, original, done (bool), entity_ids: [...]}}
+
+## Current schema
+{schema}
+
+## Rules
+- Use `query` for reads, `mutate` for writes — never mix them up
+- Before creating a new entity_type or interaction_type, check if an existing one fits
+- When upserting an entity with new attribute keys, also $addToSet those keys into the entity_type's attributes list
+- For new entities, derive the next ID from the highest existing ID of that type
+- Answer in the same language the user writes in
+- After every tool call, write a clear summary of what was found or changed"""
+
+
+def _inject_schema(state: dict) -> list:
+    schema = json.dumps(
+        {
+            "entity_types": list(_db["entity_types"].find()),
+            "interaction_types": [d["_id"] for d in _db["interaction_types"].find()],
+        },
+        default=str,
+        ensure_ascii=False,
+        indent=2,
+    )
+    return [SystemMessage(content=_SYSTEM.format(schema=schema))] + state["messages"]
+
 
 agent = create_react_agent(
-    model=_llm,
-    tools=[query],
-    prompt=_SYSTEM,
+    model=make_llm(),
+    tools=[query, mutate],
+    prompt=_inject_schema,
 )
