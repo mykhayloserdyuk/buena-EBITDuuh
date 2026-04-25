@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -5,6 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
@@ -33,6 +36,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.environ.get("CORS_ORIGIN", "*")],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 def _ingest_path(path: Path, source_path: str = "") -> dict:
@@ -85,6 +95,45 @@ def ask(req: AskRequest):
         "",
     )
     return {"response": response, "tool_calls": tool_calls}
+
+
+@app.post("/ask/stream")
+async def ask_stream(req: AskRequest):
+    async def generate():
+        try:
+            async for event in agent.astream_events(
+                {"messages": [HumanMessage(content=req.question)]},
+                version="v2",
+            ):
+                kind = event["event"]
+                if kind == "on_tool_start":
+                    yield f"data: {json.dumps({'type': 'tool_start', 'name': event['name']})}\n\n"
+                elif kind == "on_tool_end":
+                    yield f"data: {json.dumps({'type': 'tool_end', 'name': event['name']})}\n\n"
+                elif kind == "on_chat_model_stream":
+                    chunk = event["data"].get("chunk")
+                    if not chunk:
+                        continue
+                    content = chunk.content
+                    text = ""
+                    if isinstance(content, str):
+                        text = content
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text += block.get("text", "")
+                    if text:
+                        yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/ingest/file")

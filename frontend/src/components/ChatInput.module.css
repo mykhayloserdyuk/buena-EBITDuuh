@@ -48,8 +48,8 @@
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
-  background: var(--stone-800);
-  color: var(--stone-500);
+  background: var(--stone-200);
+  color: var(--stone-400);
   display: flex;
   align-items: center;
   justify-content: center;
