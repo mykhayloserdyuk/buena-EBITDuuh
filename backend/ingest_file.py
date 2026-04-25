@@ -1,6 +1,7 @@
 import logging
 import os
 import tempfile
+from email import message_from_bytes
 from pathlib import Path
 
 from docling.document_converter import DocumentConverter
@@ -13,6 +14,28 @@ from callbacks import _callback
 logger = logging.getLogger(__name__)
 
 _converter = DocumentConverter()
+
+
+def _extract(file_bytes: bytes, filename: str) -> str:
+    if Path(filename).suffix.lower() == ".eml":
+        msg = message_from_bytes(file_bytes)
+        parts = [f"From: {msg['from']}", f"To: {msg['to']}", f"Subject: {msg['subject']}", f"Date: {msg['date']}"]
+        for part in msg.walk():
+            if part.get_content_type() == "text/plain":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    parts.append(payload.decode("utf-8", errors="replace"))
+        return "\n".join(parts)
+
+    ext = Path(filename).suffix.lower() or ".bin"
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+        f.write(file_bytes)
+        tmp = f.name
+    try:
+        return _converter.convert(tmp).document.export_to_markdown()
+    finally:
+        os.unlink(tmp)
+
 
 _PROMPT = """New file to ingest: {filename}
 Source path: {source_path}
@@ -32,15 +55,7 @@ Ingest this into MongoDB:
 def ingest(file_bytes: bytes, filename: str, source_path: str = "") -> dict:
     logger.info("ingesting %s (%d bytes)", filename, len(file_bytes))
 
-    suffix = Path(filename).suffix or ".bin"
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-        f.write(file_bytes)
-        tmp = f.name
-    try:
-        text = _converter.convert(tmp).document.export_to_markdown()
-    finally:
-        os.unlink(tmp)
-
+    text = _extract(file_bytes, filename)
     logger.info("extracted %d chars, calling agent", len(text))
 
     result = agent.invoke(
