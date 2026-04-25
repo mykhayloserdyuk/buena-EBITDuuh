@@ -96,7 +96,7 @@ export default function MessageList({ messages }: MessageListProps) {
               <ToolChips toolCalls={msg.toolCalls} />
             )}
             <div className={`${styles.bubble} ${msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant}`}>
-              {msg.loading && !msg.toolCalls?.length && !msg.content
+              {msg.loading && !msg.content && !msg.toolCalls?.some(tc => tc.status === 'running')
                 ? <LoadingDots />
                 : msg.content || null}
             </div>

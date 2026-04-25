@@ -45,6 +45,29 @@
   color: var(--text-muted);
 }
 
+/* ── Right ── */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.newChatBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.newChatBtn:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
 /* ── Right: greeting card ── */
 .greetingCard {
   display: flex;

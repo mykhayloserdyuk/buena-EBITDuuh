@@ -97,13 +97,19 @@ export default function Chat() {
     }
   }, [])
 
+  const handleNewChat = useCallback(() => {
+    setMessages([])
+    setInputValue('')
+    setLoading(false)
+  }, [])
+
   const handleSuggest = useCallback((text: string) => {
     setInputValue(text)
   }, [])
 
   return (
     <div className={styles.shell}>
-      <Nav />
+      <Nav onNewChat={handleNewChat} />
       <div className={styles.body}>
         <Sidebar onSuggest={handleSuggest} />
         <div className={styles.main}>
