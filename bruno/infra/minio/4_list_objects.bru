@@ -1,0 +1,27 @@
+meta {
+  name: 4 List Objects
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{minio_endpoint}}/{{bucket}}
+  body: none
+  auth: awsv4
+}
+
+auth:awsv4 {
+  accessKeyId: {{minio_user}}
+  secretAccessKey: {{minio_pass}}
+  region: us-east-1
+  service: s3
+}
+
+tests {
+  test("bucket listing returned", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("response contains object key", function() {
+    expect(res.body).to.include("test-document.json");
+  });
+}

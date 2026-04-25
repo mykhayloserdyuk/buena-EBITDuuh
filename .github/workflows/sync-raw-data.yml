@@ -1,0 +1,30 @@
+name: Sync raw-data to MinIO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'raw-data/**'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mc
+        run: |
+          curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc \
+            -o /usr/local/bin/mc && chmod +x /usr/local/bin/mc
+
+      - name: Mirror raw-data to MinIO
+        run: |
+          mc alias set buena http://${{ secrets.MINIO_ENDPOINT }} \
+            ${{ secrets.MINIO_USER }} ${{ secrets.MINIO_PASS }}
+          mc mb --ignore-existing buena/raw-data
+          mc mirror --overwrite ./raw-data buena/raw-data

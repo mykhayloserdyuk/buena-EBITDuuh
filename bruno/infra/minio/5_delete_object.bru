@@ -1,0 +1,24 @@
+meta {
+  name: 5 Delete Object
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{minio_endpoint}}/{{bucket}}/test-document.json
+  body: none
+  auth: awsv4
+}
+
+auth:awsv4 {
+  accessKeyId: {{minio_user}}
+  secretAccessKey: {{minio_pass}}
+  region: us-east-1
+  service: s3
+}
+
+tests {
+  test("object deleted", function() {
+    expect(res.status).to.equal(204);
+  });
+}

@@ -1,0 +1,32 @@
+meta {
+  name: 2 Upload Object
+  type: http
+  seq: 2
+}
+
+put {
+  url: {{minio_endpoint}}/{{bucket}}/test-document.json
+  body: json
+  auth: awsv4
+}
+
+auth:awsv4 {
+  accessKeyId: {{minio_user}}
+  secretAccessKey: {{minio_pass}}
+  region: us-east-1
+  service: s3
+}
+
+body:json {
+  {
+    "company": "Buena Test Co",
+    "ebitda": 1200000,
+    "currency": "EUR"
+  }
+}
+
+tests {
+  test("object uploaded", function() {
+    expect(res.status).to.equal(200);
+  });
+}

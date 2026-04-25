@@ -1,0 +1,27 @@
+meta {
+  name: 3 Get Object
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{minio_endpoint}}/{{bucket}}/test-document.json
+  body: none
+  auth: awsv4
+}
+
+auth:awsv4 {
+  accessKeyId: {{minio_user}}
+  secretAccessKey: {{minio_pass}}
+  region: us-east-1
+  service: s3
+}
+
+tests {
+  test("object retrieved", function() {
+    expect(res.status).to.equal(200);
+  });
+  test("contains ebitda field", function() {
+    expect(res.body).to.have.property("ebitda");
+  });
+}
