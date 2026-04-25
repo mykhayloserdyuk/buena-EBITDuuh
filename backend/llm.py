@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 _PROVIDER = os.environ["MODEL_PROVIDER"].upper()
-_MODEL = os.environ["MODEL_NAME"].upper()
+_MODEL = os.environ["MODEL_NAME"]
 
 
 
