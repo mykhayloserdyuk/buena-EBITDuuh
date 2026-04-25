@@ -1,4 +1,5 @@
 import os
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
@@ -7,6 +8,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from pymongo import MongoClient
 from pydantic import BaseModel, Field
 
 try:
@@ -17,6 +19,8 @@ except ImportError:  # pragma: no cover - optional until requirements are instal
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_COLLECTION = "document_extractions"
 
 load_dotenv(Path(__file__).with_name(".env"))
 
@@ -64,6 +68,21 @@ class ExtractResponse(BaseModel):
     extraction: DocumentExtraction
 
 
+class IngestLocalRequest(BaseModel):
+    path: str = Field(..., description="Path to a local file, relative to the repository root or absolute.")
+    schema_hint: str | None = None
+    collection: str = DEFAULT_COLLECTION
+
+
+class IngestResponse(BaseModel):
+    collection: str
+    id: str
+    upserted: bool
+    matched_count: int
+    modified_count: int
+    extraction: ExtractResponse
+
+
 app = FastAPI(title="Buena EBITDuuh Extractor", version="0.1.0")
 
 
@@ -79,6 +98,23 @@ def _get_api_key() -> str:
 
 def _get_model_name() -> str:
     return os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+
+
+def _get_mongo_uri() -> str:
+    uri = os.getenv("MONGO_URI")
+    if not uri:
+        raise HTTPException(status_code=503, detail="Set MONGO_URI before calling ingest endpoints.")
+    return uri
+
+
+def _get_mongo_database() -> str:
+    return os.getenv("MONGO_DB", "buena")
+
+
+def _get_mongo_collection(name: str):
+    client = MongoClient(_get_mongo_uri(), serverSelectionTimeoutMS=8000)
+    db = client[_get_mongo_database()]
+    return db[name]
 
 
 def _build_chain() -> Any:
@@ -158,6 +194,84 @@ def _decode_upload(filename: str, content_type: str | None, raw: bytes) -> str:
     raise HTTPException(status_code=415, detail="Unsupported file encoding.")
 
 
+def _resolve_local_path(path: str) -> Path:
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"File not found: {path}") from exc
+    if not resolved.is_file():
+        raise HTTPException(status_code=400, detail=f"Path is not a file: {path}")
+    return resolved
+
+
+def _source_metadata(filename: str, raw: bytes, local_path: Path | None = None) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "filename": filename,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+    }
+    if local_path:
+        try:
+            metadata["path"] = str(local_path.relative_to(REPO_ROOT))
+            metadata["type"] = "local_file"
+        except ValueError:
+            metadata["path"] = str(local_path)
+            metadata["type"] = "absolute_local_file"
+    else:
+        metadata["type"] = "upload"
+    return metadata
+
+
+def _persist_extraction(
+    *,
+    collection_name: str,
+    source: dict[str, Any],
+    extraction: ExtractResponse,
+) -> IngestResponse:
+    collection = _get_mongo_collection(collection_name)
+    collection.create_index("source.sha256", unique=True)
+    document = {
+        "source": source,
+        "workflow": {
+            "name": "langchain_document_extraction",
+            "model": extraction.model,
+            "llm_used": True,
+        },
+        "document": extraction.extraction.model_dump(mode="json"),
+    }
+    result = collection.replace_one({"source.sha256": source["sha256"]}, document, upsert=True)
+    inserted_id = result.upserted_id
+    if inserted_id is None:
+        existing = collection.find_one({"source.sha256": source["sha256"]}, {"_id": 1})
+        inserted_id = existing["_id"]
+    return IngestResponse(
+        collection=collection_name,
+        id=str(inserted_id),
+        upserted=bool(result.upserted_id),
+        matched_count=result.matched_count,
+        modified_count=result.modified_count,
+        extraction=extraction,
+    )
+
+
+def _ingest_raw_bytes(
+    *,
+    raw: bytes,
+    filename: str,
+    content_type: str | None,
+    schema_hint: str | None,
+    collection: str,
+    local_path: Path | None = None,
+) -> IngestResponse:
+    content = _decode_upload(filename, content_type, raw)
+    extraction = _extract_with_llm(content, filename, schema_hint)
+    source = _source_metadata(filename, raw, local_path)
+    return _persist_extraction(collection_name=collection, source=source, extraction=extraction)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -176,3 +290,34 @@ async def extract_file(
     raw = await file.read()
     content = _decode_upload(file.filename or "upload", file.content_type, raw)
     return _extract_with_llm(content, file.filename, schema_hint)
+
+
+@app.post("/ingest/file", response_model=IngestResponse)
+async def ingest_file(
+    file: UploadFile = File(...),
+    schema_hint: str | None = None,
+    collection: str = DEFAULT_COLLECTION,
+) -> IngestResponse:
+    raw = await file.read()
+    return _ingest_raw_bytes(
+        raw=raw,
+        filename=file.filename or "upload",
+        content_type=file.content_type,
+        schema_hint=schema_hint,
+        collection=collection,
+    )
+
+
+@app.post("/ingest/local", response_model=IngestResponse)
+def ingest_local(request: IngestLocalRequest) -> IngestResponse:
+    path = _resolve_local_path(request.path)
+    raw = path.read_bytes()
+    content_type = "application/pdf" if path.suffix.lower() == ".pdf" else None
+    return _ingest_raw_bytes(
+        raw=raw,
+        filename=path.name,
+        content_type=content_type,
+        schema_hint=request.schema_hint,
+        collection=request.collection,
+        local_path=path,
+    )

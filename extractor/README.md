@@ -10,6 +10,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export GOOGLE_API_KEY="your-google-api-key"
+export MONGO_URI="mongodb://user:password@host:27017/buena?authSource=admin"
 uvicorn extractor:app --reload
 ```
 
@@ -37,4 +38,19 @@ curl -X POST http://127.0.0.1:8000/extract/text \
 ```sh
 curl -X POST http://127.0.0.1:8000/extract/file \
   -F 'file=@../raw-data/bank/bank_index.csv'
+```
+
+Ingest one local file into MongoDB:
+
+```sh
+curl -X POST http://127.0.0.1:8000/ingest/local \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"raw-data/rechnungen/2024-01/20240106_DL-010_INV-00001.pdf"}'
+```
+
+Upload and ingest one file into MongoDB:
+
+```sh
+curl -X POST http://127.0.0.1:8000/ingest/file \
+  -F 'file=@../raw-data/rechnungen/2024-01/20240106_DL-010_INV-00001.pdf'
 ```
