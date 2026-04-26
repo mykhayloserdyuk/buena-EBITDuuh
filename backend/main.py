@@ -8,6 +8,7 @@ from email import message_from_bytes
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from backend.voice import handle_voice_call
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from typing import Annotated
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -471,3 +472,7 @@ def get_eml_attachment(path: Annotated[str, Query()], index: Annotated[int, Quer
         media_type=content_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+@app.websocket("/voice")
+async def voice_endpoint(ws: WebSocket):
+    await handle_voice_call(ws)
