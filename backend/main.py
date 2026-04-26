@@ -6,6 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from email import message_from_bytes
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from typing import Annotated
@@ -18,7 +19,7 @@ from pydantic import BaseModel
 
 from agent import openui_agent
 from callbacks import _callback
-from db import ensure_indexes
+from db import _db, ensure_indexes
 from email_poller import run_email_poller
 from ingest_file import ingest
 from minio_client import list_minio_object_keys, minio_prefix_exists, read_minio_object
@@ -100,6 +101,133 @@ def _text(content) -> str:
             b["text"] for b in content if isinstance(b, dict) and "text" in b
         )
     return ""
+
+
+def _number_label(value: int, singular: str, plural: str) -> str:
+    return f"{value} {singular if value == 1 else plural}"
+
+
+def _to_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number.is_integer() is False else int(number)
+
+
+def _house_number(house_id: str) -> str:
+    return house_id.removeprefix("HAUS-")
+
+
+def _presentation_address(house_id: str) -> str:
+    return f"Immanuelkirchstraße {_house_number(house_id)}, 10405 Berlin"
+
+
+def _maps_url(address: str) -> str:
+    return f"https://www.google.com/maps/search/?api=1&query={quote_plus(address)}"
+
+
+def _unit_name(doc: dict) -> str:
+    return str(doc.get("einheit_nr") or doc.get("name") or doc.get("_id") or "").strip()
+
+
+def _unit_meta(doc: dict) -> str:
+    area = _to_number(doc.get("wohnflaeche_qm"))
+    rooms = _to_number(doc.get("zimmer"))
+    parts = [
+        str(doc.get("lage") or ""),
+        str(doc.get("typ") or ""),
+        f"{area:g} qm" if isinstance(area, (int, float)) and area > 0 else "",
+        f"{rooms:g} Zi." if isinstance(rooms, (int, float)) and rooms > 0 else "",
+    ]
+    return " · ".join(part for part in parts if part)
+
+
+@app.get("/properties")
+def properties():
+    unit_docs = list(
+        _db["entities"]
+        .find(
+            {"type": "einheit", "haus_id": {"$type": "string", "$ne": ""}},
+            {
+                "_id": 1,
+                "haus_id": 1,
+                "einheit_nr": 1,
+                "lage": 1,
+                "typ": 1,
+                "wohnflaeche_qm": 1,
+                "zimmer": 1,
+                "miteigentumsanteil": 1,
+            },
+        )
+        .sort([("haus_id", 1), ("einheit_nr", 1), ("_id", 1)])
+    )
+
+    if not unit_docs:
+        return {"properties": []}
+
+    house_map: dict[str, dict] = {}
+    for doc in unit_docs:
+        house_id = str(doc["haus_id"])
+        house = house_map.setdefault(house_id, {"total_area": 0, "units": []})
+        area = _to_number(doc.get("wohnflaeche_qm"))
+        if isinstance(area, (int, float)):
+            house["total_area"] += area
+        house["units"].append(
+            {
+                "id": str(doc["_id"]),
+                "name": _unit_name(doc),
+                "meta": _unit_meta(doc),
+                "location": doc.get("lage"),
+                "kind": doc.get("typ"),
+                "area": area,
+                "rooms": _to_number(doc.get("zimmer")),
+                "ownershipShare": _to_number(doc.get("miteigentumsanteil")),
+            }
+        )
+
+    house_images = ["/haus1.png", "/haus2.png", "/haus3.png", "/haus4.png"]
+    houses = []
+    for index, house_id in enumerate(sorted(house_map)):
+        house = house_map[house_id]
+        address = _presentation_address(house_id)
+        total_area = round(house["total_area"])
+        meta_parts = [
+            _number_label(len(house["units"]), "Einheit", "Einheiten"),
+            f"{total_area} qm" if total_area > 0 else "",
+        ]
+        houses.append(
+            {
+                "id": house_id,
+                "name": f"Haus {_house_number(house_id)}",
+                "meta": " · ".join(part for part in meta_parts if part),
+                "image": house_images[index % len(house_images)],
+                "address": address,
+                "mapsUrl": _maps_url(address),
+                "unitCount": len(house["units"]),
+                "totalArea": total_area,
+                "units": house["units"],
+            }
+        )
+
+    total_area = sum(house["totalArea"] for house in houses)
+    meta_parts = [
+        _number_label(len(houses), "Gebäude", "Gebäude"),
+        _number_label(len(unit_docs), "Einheit", "Einheiten"),
+        f"{total_area} qm" if total_area > 0 else "",
+    ]
+
+    return {
+        "properties": [
+            {
+                "id": "portfolio",
+                "name": "Gesamtbestand",
+                "meta": " · ".join(part for part in meta_parts if part),
+                "image": "/condominium.webp",
+                "houses": houses,
+            }
+        ]
+    }
 
 
 @app.post("/ask")
