@@ -71,49 +71,6 @@
   overflow-y: auto;
 }
 
-.pathBox {
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.pathStep,
-.pathCurrent {
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pathStep {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.pathSeparator {
-  color: var(--stone-600);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.pathCurrent {
-  color: var(--text-primary);
-  font-weight: 600;
-  text-align: left;
-}
-
-.pathCurrent:disabled {
-  opacity: 0.65;
-}
-
 .dropdownItem {
   width: 100%;
   display: flex;
@@ -169,7 +126,9 @@
 .imageOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(1,1,5,0.92) 0%, rgba(1,1,5,0.3) 55%, rgba(1,1,5,0.0) 100%);
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.84) 0%, rgba(0, 0, 0, 0.46) 48%, rgba(0, 0, 0, 0.08) 100%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.02));
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -187,15 +146,17 @@
 .orgName {
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #fff;
   line-height: 1.1;
+  text-shadow: 0 1px 9px rgba(0, 0, 0, 0.55);
 }
 
 .propertyMeta {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 560;
+  color: rgba(255, 255, 255, 0.78);
   line-height: 1.4;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.58);
 }
 
 .mapLink {
@@ -206,17 +167,17 @@
   min-height: 30px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  color: #182027;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 680;
   text-decoration: none;
   backdrop-filter: blur(10px);
 }
 
 .mapLink:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 /* ── Current selection ── */
@@ -320,44 +281,6 @@
   text-overflow: ellipsis;
 }
 
-/* ── Suggestions ── */
-.section {
-  padding: 20px 16px 16px;
+.sidebarFill {
   flex: 1;
-  overflow-y: auto;
-}
-
-.sectionLabel {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--stone-600);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-
-.suggestionList {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.suggestion {
-  width: 100%;
-  text-align: left;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text-muted);
-  padding: 9px 11px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  line-height: 1.4;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.suggestion:hover {
-  background: var(--surface);
-  color: var(--text-primary);
-  border-color: var(--border);
 }

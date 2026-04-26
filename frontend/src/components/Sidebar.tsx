@@ -34,18 +34,7 @@ type Unit = {
   ownershipShare?: number
 }
 
-const suggested = [
-  'Welche Mieter haben offene Zahlungen?',
-  'Zeig mir alle Eigentümer im Beirat.',
-  'Was hat Hausmeister Mueller GmbH dieses Jahr gekostet?',
-  'Wie hoch sind die monatlichen Mieteinnahmen?',
-]
-
-interface SidebarProps {
-  onSuggest: (text: string) => void
-}
-
-export default function Sidebar({ onSuggest }: SidebarProps) {
+export default function Sidebar() {
   const [properties, setProperties] = useState<Property[]>([])
   const [selectedPropertyId, setSelectedPropertyId] = useState('')
   const [selectedHouseId, setSelectedHouseId] = useState('')
@@ -222,11 +211,6 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
             </div>
           )}
 
-          <div className={styles.pathBox}>
-            <span className={styles.pathStep}>{selectedHouse?.name ?? 'Haus'}</span>
-            <span className={styles.pathSeparator}>/</span>
-            <span className={styles.pathCurrent}>{selectedUnit?.name ?? 'Einheit'}</span>
-          </div>
         </div>
       </div>
 
@@ -269,18 +253,7 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
         </div>
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.sectionLabel}>Vorgeschlagene Fragen</div>
-        <ul className={styles.suggestionList}>
-          {suggested.map((s) => (
-            <li key={s}>
-              <button className={styles.suggestion} onClick={() => onSuggest(s)}>
-                {s}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <div className={styles.sidebarFill} />
     </aside>
   )
 }

@@ -28,8 +28,81 @@
 }
 
 .inputArea {
+  position: relative;
   border-top: 1px solid var(--border);
   background: var(--bg);
+  padding-top: 18px;
+}
+
+.suggestionRail {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: min(1040px, calc(100% - 32px));
+  margin: 0 auto 18px;
+  padding: 0 4px;
+  overflow: visible;
+}
+
+.suggestionBubble {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: none;
+  min-height: 38px;
+  padding: 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  opacity: 0;
+  transform: translateY(6px);
+  transform-origin: center;
+  animation: suggestionIn 620ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.22s ease, padding 0.22s ease;
+}
+
+.suggestionBubble:hover {
+  transform: scale(1.035);
+  padding-inline: 16px;
+  background: var(--surface);
+  border-color: var(--stone-300);
+  color: var(--text-primary);
+}
+
+.suggestionMeasure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+@keyframes suggestionIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .suggestionBubble {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
 }
 
 @media (max-width: 640px) {

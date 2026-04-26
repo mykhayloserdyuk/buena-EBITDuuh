@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Nav from '@/components/Nav'
 import Sidebar from '@/components/Sidebar'
 import MessageList, { Message } from '@/components/MessageList'
@@ -16,11 +16,20 @@ const DEMO_REPLIES = [
   'Die Anfrage wurde verarbeitet. Um Echtzeitdaten abzurufen, starten Sie bitte den buena-Agenten unter `backend/agent.py` und stellen Sie sicher, dass MongoDB läuft.',
 ]
 
+const suggested = [
+  'Welche Mieter haben offene Zahlungen?',
+  'Zeig mir alle Eigentümer im Beirat.',
+  'Was hat Hausmeister Mueller GmbH dieses Jahr gekostet?',
+  'Wie hoch sind die monatlichen Mieteinnahmen?',
+]
+
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [conversationId, setConversationId] = useState(() => crypto.randomUUID())
+  const [visibleSuggestionCount, setVisibleSuggestionCount] = useState(suggested.length)
+  const suggestionRailRef = useRef<HTMLDivElement>(null)
 
   const handleSend = useCallback(async (text: string) => {
     const userMsg: Message = { id: uid(), role: 'user', content: text }
@@ -78,16 +87,67 @@ export default function Chat() {
     setInputValue(text)
   }, [])
 
+  useEffect(() => {
+    const rail = suggestionRailRef.current
+    if (!rail) return
+
+    const updateVisibleSuggestions = () => {
+      const gap = 12
+      const horizontalPadding = 32
+      const measure = document.createElement('span')
+      measure.className = styles.suggestionMeasure
+      document.body.appendChild(measure)
+
+      let used = 0
+      let count = 0
+      const maxWidth = rail.clientWidth
+
+      for (const suggestion of suggested) {
+        measure.textContent = suggestion
+        const width = Math.ceil(measure.getBoundingClientRect().width) + horizontalPadding
+        const nextUsed = used + (count > 0 ? gap : 0) + width
+
+        if (nextUsed > maxWidth) break
+
+        used = nextUsed
+        count += 1
+      }
+
+      measure.remove()
+      setVisibleSuggestionCount(Math.min(suggested.length, count))
+    }
+
+    updateVisibleSuggestions()
+
+    const observer = new ResizeObserver(updateVisibleSuggestions)
+    observer.observe(rail)
+
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div className={styles.shell}>
       <Nav onNewChat={handleNewChat} />
       <div className={styles.body}>
-        <Sidebar onSuggest={handleSuggest} />
+        <Sidebar />
         <div className={styles.main}>
           <div className={styles.messages}>
             <MessageList messages={messages} onSend={handleSend} />
           </div>
           <div className={styles.inputArea}>
+            <div ref={suggestionRailRef} className={styles.suggestionRail} aria-label="Vorgeschlagene Fragen">
+              {suggested.slice(0, visibleSuggestionCount).map((suggestion, index) => (
+                <button
+                  key={suggestion}
+                  className={styles.suggestionBubble}
+                  onClick={() => handleSuggest(suggestion)}
+                  style={{ animationDelay: `${index * 120}ms` }}
+                  type="button"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
             <ChatInput
               onSend={handleSend}
               disabled={loading}
