@@ -52,32 +52,28 @@
   gap: 8px;
 }
 
-.newChatBtn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.newChatBtn:hover {
-  background: var(--surface);
-  color: var(--text-primary);
-}
-
 /* ── Right: greeting card ── */
+.profileMenu {
+  position: relative;
+}
+
 .greetingCard {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
+  min-width: 90px;
   padding: 5px 5px 5px 14px;
   box-shadow: var(--shadow-sm);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.greetingCard:hover {
+  background: var(--bg);
+  border-color: var(--stone-300);
 }
 
 .greetingText {
@@ -112,4 +108,89 @@
   flex-shrink: 0;
   border: 2px solid var(--bg);
   box-shadow: 0 0 0 1px var(--border);
+}
+
+.profilePopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+  backdrop-filter: blur(14px);
+}
+
+.profileHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.profileHeader strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.profileEyebrow {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--stone-600);
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+.profileRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.profileRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profileRow span {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--stone-600);
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+}
+
+.profileRow strong {
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.profileAction {
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.profileAction:hover {
+  background: var(--surface);
+  border-color: var(--stone-300);
 }
