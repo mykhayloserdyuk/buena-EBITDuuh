@@ -1,8 +1,10 @@
 import json
 import logging
+from pathlib import Path
 
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from llm import make_llm
 from db import _db
@@ -104,8 +106,37 @@ def _inject_schema(state: dict) -> list:
     return [SystemMessage(content=_SYSTEM.format(schema=schema))] + state["messages"]
 
 
+_memory = MemorySaver()
+
 agent = create_react_agent(
     model=make_llm(),
     tools=[query, mutate],
     prompt=_inject_schema,
+    checkpointer=_memory,
+)
+
+_OPENUI_SYS = (Path(__file__).parent / "openui_prompt.txt").read_text()
+
+
+def _inject_schema_openui(state: dict) -> list:
+    schema = json.dumps(
+        {
+            "entity_types": list(_db["entity_types"].find()),
+            "interaction_types": [d["_id"] for d in _db["interaction_types"].find()],
+        },
+        default=str,
+        ensure_ascii=False,
+        indent=2,
+    )
+    system = _SYSTEM.format(schema=schema) + "\n\n" + _OPENUI_SYS
+    return [SystemMessage(content=system)] + state["messages"]
+
+
+_openui_memory = MemorySaver()
+
+openui_agent = create_react_agent(
+    model=make_llm(),
+    tools=[query, mutate],
+    prompt=_inject_schema_openui,
+    checkpointer=_openui_memory,
 )

@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Renderer } from '@openuidev/react-lang'
+import { openuiChatLibrary } from '@openuidev/react-ui/genui-lib'
 import styles from './MessageList.module.css'
 
 export interface ToolCall {
@@ -12,6 +16,7 @@ export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  responseType?: 'text' | 'openui'
   loading?: boolean
   toolCalls?: ToolCall[]
 }
@@ -63,9 +68,10 @@ function ToolChips({ toolCalls }: { toolCalls: ToolCall[] }) {
 
 interface MessageListProps {
   messages: Message[]
+  onSend?: (text: string) => void
 }
 
-export default function MessageList({ messages }: MessageListProps) {
+export default function MessageList({ messages, onSend }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -95,11 +101,24 @@ export default function MessageList({ messages }: MessageListProps) {
             {msg.role === 'assistant' && !!msg.toolCalls?.length && (
               <ToolChips toolCalls={msg.toolCalls} />
             )}
-            <div className={`${styles.bubble} ${msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant}`}>
-              {msg.loading && !msg.content && !msg.toolCalls?.some(tc => tc.status === 'running')
-                ? <LoadingDots />
-                : msg.content || null}
-            </div>
+            {msg.role === 'user' ? (
+              <div className={`${styles.bubble} ${styles.bubbleUser}`}>{msg.content}</div>
+            ) : msg.loading && !msg.content && !msg.toolCalls?.some(tc => tc.status === 'running') ? (
+              <div className={`${styles.bubble} ${styles.bubbleAssistant}`}><LoadingDots /></div>
+            ) : msg.responseType === 'openui' ? (
+              <Renderer
+                response={msg.content}
+                library={openuiChatLibrary}
+                isStreaming={false}
+                onAction={e => e.type === 'continue_conversation' && onSend?.(e.humanFriendlyMessage)}
+              />
+            ) : (
+              <div className={`${styles.bubble} ${styles.bubbleAssistant} ${styles.markdown}`}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
         </div>
       ))}
