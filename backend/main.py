@@ -115,6 +115,14 @@ def _to_number(value):
     return number if number.is_integer() is False else int(number)
 
 
+def _first_number(doc: dict, fields: list[str]):
+    for field in fields:
+        number = _to_number(doc.get(field))
+        if isinstance(number, (int, float)):
+            return number
+    return None
+
+
 def _house_number(house_id: str) -> str:
     return house_id.removeprefix("HAUS-")
 
@@ -143,8 +151,59 @@ def _unit_meta(doc: dict) -> str:
     return " · ".join(part for part in parts if part)
 
 
+_RENT_FIELDS = [
+    "miete",
+    "rent",
+    "income",
+    "kaltmiete",
+    "warmmiete",
+    "nettokaltmiete",
+    "bruttomiete",
+    "monatsmiete",
+    "miete_monat",
+    "monthly_rent",
+]
+
+
+def _load_rent_index() -> tuple[dict[str, float], dict[str, float]]:
+    tenant_docs = _db["entities"].find(
+        {"type": "mieter"},
+        {
+            "_id": 1,
+            "einheit_id": 1,
+            "unit_id": 1,
+            "unitId": 1,
+            "einheit": 1,
+            "haus_id": 1,
+            "einheit_nr": 1,
+            **{field: 1 for field in _RENT_FIELDS},
+        },
+    )
+
+    rent_by_unit_id: dict[str, float] = {}
+    rent_by_house_unit: dict[str, float] = {}
+    for doc in tenant_docs:
+        rent = _first_number(doc, _RENT_FIELDS)
+        if not isinstance(rent, (int, float)):
+            continue
+
+        for unit_id_field in ("einheit_id", "unit_id", "unitId", "einheit"):
+            unit_id = doc.get(unit_id_field)
+            if isinstance(unit_id, str) and unit_id:
+                rent_by_unit_id[unit_id] = rent_by_unit_id.get(unit_id, 0) + rent
+
+        haus_id = doc.get("haus_id")
+        einheit_nr = doc.get("einheit_nr")
+        if isinstance(haus_id, str) and isinstance(einheit_nr, str):
+            key = f"{haus_id}|{einheit_nr}"
+            rent_by_house_unit[key] = rent_by_house_unit.get(key, 0) + rent
+
+    return rent_by_unit_id, rent_by_house_unit
+
+
 @app.get("/properties")
 def properties():
+    rent_by_unit_id, rent_by_house_unit = _load_rent_index()
     unit_docs = list(
         _db["entities"]
         .find(
@@ -158,6 +217,7 @@ def properties():
                 "wohnflaeche_qm": 1,
                 "zimmer": 1,
                 "miteigentumsanteil": 1,
+                **{field: 1 for field in _RENT_FIELDS},
             },
         )
         .sort([("haus_id", 1), ("einheit_nr", 1), ("_id", 1)])
@@ -173,16 +233,23 @@ def properties():
         area = _to_number(doc.get("wohnflaeche_qm"))
         if isinstance(area, (int, float)):
             house["total_area"] += area
+        unit_id = str(doc["_id"])
+        house_unit_key = f"{house_id}|{doc.get('einheit_nr')}"
+        income = (
+            _first_number(doc, _RENT_FIELDS)
+            or rent_by_unit_id.get(unit_id)
+            or rent_by_house_unit.get(house_unit_key)
+        )
         house["units"].append(
             {
-                "id": str(doc["_id"]),
+                "id": unit_id,
                 "name": _unit_name(doc),
                 "meta": _unit_meta(doc),
                 "location": doc.get("lage"),
                 "kind": doc.get("typ"),
                 "area": area,
                 "rooms": _to_number(doc.get("zimmer")),
-                "ownershipShare": _to_number(doc.get("miteigentumsanteil")),
+                "income": income,
             }
         )
 

@@ -31,7 +31,7 @@ type Unit = {
   kind?: string
   area?: number
   rooms?: number
-  ownershipShare?: number
+  income?: number
 }
 
 export default function Sidebar() {
@@ -49,6 +49,13 @@ export default function Sidebar() {
   const selectedHouse = houses.find(house => house.id === selectedHouseId) ?? houses[0]
   const units = selectedHouse?.units ?? []
   const selectedUnit = units.find(unit => unit.id === selectedUnitId) ?? units[0]
+  const formattedIncome = typeof selectedUnit?.income === 'number'
+    ? new Intl.NumberFormat('de-DE', {
+        style: 'currency',
+        currency: 'EUR',
+        maximumFractionDigits: 0,
+      }).format(selectedUnit.income)
+    : '-'
 
   useEffect(() => {
     let cancelled = false
@@ -141,7 +148,29 @@ export default function Sidebar() {
               rel="noreferrer"
               aria-label={`${selectedHouse.name} in Google Maps öffnen`}
             >
-              Karte
+              <svg
+                className={styles.mapIcon}
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M9 3v15M15 6v15"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </a>
           )}
         </div>
@@ -232,7 +261,7 @@ export default function Sidebar() {
 
       <div className={styles.metrics}>
         <div className={styles.metric}>
-          <span className={styles.metricLabel}>Einheiten</span>
+          <span className={styles.metricLabel}>Einheiten (Haus)</span>
           <span className={styles.metricValue}>{(selectedHouse?.unitCount ?? units.length) || '-'}</span>
         </div>
         <div className={styles.metric}>
@@ -252,8 +281,8 @@ export default function Sidebar() {
           <span className={styles.metricValue}>{selectedUnit?.kind ?? '-'}</span>
         </div>
         <div className={styles.metricWide}>
-          <span className={styles.metricLabel}>MEA</span>
-          <span className={styles.metricValue}>{selectedUnit?.ownershipShare ?? '-'}</span>
+          <span className={styles.metricLabel}>Miete</span>
+          <span className={styles.metricValue}>{formattedIncome}</span>
         </div>
       </div>
 
