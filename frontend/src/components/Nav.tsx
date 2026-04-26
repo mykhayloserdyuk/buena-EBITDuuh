@@ -1,30 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import styles from './Nav.module.css'
 
-const greetings = ['Hallo', 'Bonjour', 'Hello', 'Ciao', 'Hola', 'Guten Tag']
+interface NavProps {
+  onNewChat?: () => void
+}
 
-export default function Nav() {
-  const [greeting, setGreeting] = useState(greetings[0])
-  const [fade, setFade] = useState(true)
-
-  useEffect(() => {
-    let idx = 0
-    const interval = setInterval(() => {
-      setFade(false)
-      setTimeout(() => {
-        idx = (idx + 1) % greetings.length
-        setGreeting(greetings[idx])
-        setFade(true)
-      }, 200)
-    }, 2800)
-    return () => clearInterval(interval)
-  }, [])
-
+export default function Nav({ onNewChat }: NavProps) {
   return (
     <nav className={styles.nav}>
-      {/* Left: property image + buena wordmark */}
       <div className={styles.left}>
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -38,7 +22,7 @@ export default function Nav() {
           <path
             fill="currentColor"
             fillRule="evenodd"
-            d="M19 0c1.147 0 2.1.885 2.185 2.03l.068.917a10.44 10.44 0 0 1 4.2-.876c5.786 0 10.476 4.69 10.476 10.476a10.44 10.44 0 0 1-.877 4.2l.919.068a2.19 2.19 0 0 1 0 4.37l-.918.068a10.44 10.44 0 0 1 .876 4.2c0 5.786-4.69 10.476-10.476 10.476a10.44 10.44 0 0 1-4.2-.877l-.068.919a2.19 2.19 0 0 1-4.37 0l-.068-.918a10.44 10.44 0 0 1-4.2.876c-5.786 0-10.476-4.69-10.476-10.476 0-1.494.313-2.914.876-4.2l-.918-.068a2.191 2.191 0 0 1 0-4.37l.918-.068a10.44 10.44 0 0 1-.876-4.2c0-5.786 4.69-10.476 10.476-10.476 1.493 0 2.914.313 4.2.876l.068-.918A2.191 2.191 0 0 1 19 0ZM7.924 19l-1.38 1.762a7.573 7.573 0 0 0-1.615 4.691 7.618 7.618 0 0 0 7.618 7.618 7.573 7.573 0 0 0 4.691-1.615L19 30.076l1.762 1.38a7.573 7.573 0 0 0 4.691 1.615 7.618 7.618 0 0 0 7.618-7.618 7.573 7.573 0 0 0-1.615-4.691L30.076 19l1.38-1.762a7.573 7.573 0 0 0 1.615-4.691 7.618 7.618 0 0 0-7.618-7.618 7.573 7.573 0 0 0-4.691 1.615L19 7.924l-1.762-1.38a7.573 7.573 0 0 0-4.691-1.615 7.618 7.618 0 0 0-7.618 7.618 7.57 7.57 0 0 0 1.615 4.691L7.924 19Z"
+            d="M19 0c1.147 0 2.1.885 2.185 2.03l.068.917a10.44 10.44 0 0 1 4.2-.876c5.786 0 10.476 4.69 10.476 10.476a10.44 10.44 0 0 1-.877 4.2l.919.068a2.19 2.19 0 0 1 0 4.37l-.918.068a10.44 10.44 0 0 1 .876 4.2c0 5.786-4.69 10.476-10.476 10.476a10.44 10.44 0 0 1-4.2-.877l-.068.919a2.19 2.19 0 0 1-4.37 0l-.068-.918a10.44 10.44 0 0 1-4.2.876c-5.786 0-10.476-4.69-10.476-10.476 0-1.494.313-2.914.876-4.2l-.918-.068a2.191 2.191 0 0 1 0-4.37l.918-.068a10.44 10.44 0 0 1-.876-4.2c0-5.786 4.69-10.476 10.476-10.476 1.493 0 2.914.313 4.2.876l.068-.918A2.191 2.191 0 0 1 19 0ZM7.924 19l-1.38 1.762a7.573 7.573 0 0 0-1.615 4.691 7.618 7.618 0 0 0 7.618 7.618 7.573 7.573 0 0 0 4.691-1.615L19 30.076l1.38-1.38a7.573 7.573 0 0 0 4.691 1.615 7.618 7.618 0 0 0 7.618-7.618 7.573 7.573 0 0 0-1.615-4.691L30.076 19l1.38-1.762a7.573 7.573 0 0 0 1.615-4.691 7.618 7.618 0 0 0-7.618-7.618 7.573 7.573 0 0 0-4.691 1.615L19 7.924l-1.762-1.38a7.573 7.573 0 0 0-4.691-1.615 7.618 7.618 0 0 0-7.618 7.618 7.57 7.57 0 0 0 1.615 4.691L7.924 19Z"
             clipRule="evenodd"
           />
         </svg>
@@ -47,18 +31,26 @@ export default function Nav() {
         <span className={styles.subtitle}>Hausverwaltung</span>
       </div>
 
-      {/* Right: CEO greeting card */}
-      <div className={styles.greetingCard}>
-        <div className={styles.greetingText}>
-          <span
-            className={styles.greeting}
-            style={{ opacity: fade ? 1 : 0 }}
-          >
-            {greeting},
-          </span>
-          <span className={styles.greetingName}>Din</span>
+      <div className={styles.right}>
+        <button
+          className={styles.newChatBtn}
+          onClick={onNewChat}
+          title="Neuer Chat"
+          aria-label="Neuer Chat"
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+            <path d="M11.5 1.5a1.414 1.414 0 0 1 2 2L5 12H3v-2L11.5 1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M13 13H3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        <div className={styles.greetingCard}>
+          <div className={styles.greetingText}>
+            <span className={styles.greeting}>Hello,</span>
+            <span className={styles.greetingName}>Din</span>
+          </div>
+          <div className={styles.avatar} />
         </div>
-        <div className={styles.avatar} />
       </div>
     </nav>
   )

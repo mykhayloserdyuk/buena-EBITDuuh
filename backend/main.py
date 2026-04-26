@@ -29,7 +29,9 @@ _SKIP = {".DS_Store", "incremental_manifest.json", "stammdaten.json"}
 async def lifespan(app: FastAPI):
     ensure_indexes()
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(name)-20s %(levelname)s %(message)s"))
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(name)-20s %(levelname)s %(message)s")
+    )
     for name in ("ingest_file", "agent"):
         lg = logging.getLogger(name)
         lg.addHandler(handler)
@@ -85,7 +87,9 @@ def _text(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return "".join(b["text"] for b in content if isinstance(b, dict) and "text" in b)
+        return "".join(
+            b["text"] for b in content if isinstance(b, dict) and "text" in b
+        )
     return ""
 
 
@@ -100,7 +104,9 @@ def ask(req: AskRequest):
     for msg in result["messages"]:
         if isinstance(msg, AIMessage):
             for tc in msg.tool_calls or []:
-                tool_calls.append({"tool": tc["name"], "input": tc["args"], "output": None})
+                tool_calls.append(
+                    {"tool": tc["name"], "input": tc["args"], "output": None}
+                )
         elif isinstance(msg, ToolMessage):
             for t in reversed(tool_calls):
                 if t["output"] is None:
@@ -108,7 +114,11 @@ def ask(req: AskRequest):
                     break
 
     response = next(
-        (_text(m.content) for m in reversed(result["messages"]) if isinstance(m, AIMessage) and _text(m.content)),
+        (
+            _text(m.content)
+            for m in reversed(result["messages"])
+            if isinstance(m, AIMessage) and _text(m.content)
+        ),
         "",
     )
     return {"response": response, "tool_calls": tool_calls}
@@ -166,8 +176,14 @@ async def ingest_file_endpoint(
 def ingest_stammdaten():
     stammdaten_prefix = _raw_key("stammdaten/")
     if not minio_prefix_exists(_RAW_DATA, stammdaten_prefix):
-        raise HTTPException(404, f"stammdaten dir not found: s3://{_RAW_DATA}/{stammdaten_prefix}")
-    files = sorted(f for f in list_minio_object_keys(_RAW_DATA, stammdaten_prefix) if Path(f).suffix == ".csv")
+        raise HTTPException(
+            404, f"stammdaten dir not found: s3://{_RAW_DATA}/{stammdaten_prefix}"
+        )
+    files = sorted(
+        f
+        for f in list_minio_object_keys(_RAW_DATA, stammdaten_prefix)
+        if Path(f).suffix == ".csv"
+    )
     return {"results": _ingest_dir(files)}
 
 

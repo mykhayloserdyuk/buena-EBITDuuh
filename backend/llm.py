@@ -9,13 +9,14 @@ _PROVIDER = os.environ["MODEL_PROVIDER"].upper()
 _MODEL = os.environ["MODEL_NAME"]
 
 
-
 def make_llm():
     if _PROVIDER == "GEMINI":
         from langchain_google_genai import ChatGoogleGenerativeAI
+
         return ChatGoogleGenerativeAI(model=_MODEL, temperature=0)
     elif _PROVIDER == "PRIVATE":
         from gen_ai_hub.proxy.langchain.init_models import init_llm
+
         return init_llm(_MODEL, temperature=0, max_tokens=32000)
     else:
         raise ValueError(f"Unknown MODEL_PROVIDER: {_PROVIDER}")
