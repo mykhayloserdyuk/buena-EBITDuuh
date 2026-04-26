@@ -127,6 +127,33 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
 
   return (
     <aside className={styles.sidebar}>
+      <div
+        className={styles.imageWrap}
+        style={{ backgroundImage: `url(${selectedHouse?.image ?? selectedProperty?.image ?? '/condominium.webp'})` }}
+        role="img"
+        aria-label={selectedHouse?.name ?? selectedProperty?.name ?? 'Keine Objekte'}
+      >
+        <div className={styles.imageOverlay}>
+          <div className={styles.heroText}>
+            <span className={styles.orgName}>{selectedHouse?.name ?? 'Haus'}</span>
+            <span className={styles.propertyMeta}>
+              {propertyError || selectedHouse?.address || 'Keine Adresse hinterlegt'}
+            </span>
+          </div>
+          {selectedHouse?.mapsUrl && (
+            <a
+              className={styles.mapLink}
+              href={selectedHouse.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${selectedHouse.name} in Google Maps öffnen`}
+            >
+              Karte
+            </a>
+          )}
+        </div>
+      </div>
+
       <div className={styles.dropdownWrap} ref={ref}>
         <div className={styles.selectorStack}>
           <button
@@ -200,33 +227,6 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
             <span className={styles.pathSeparator}>/</span>
             <span className={styles.pathCurrent}>{selectedUnit?.name ?? 'Einheit'}</span>
           </div>
-        </div>
-      </div>
-
-      <div
-        className={styles.imageWrap}
-        style={{ backgroundImage: `url(${selectedHouse?.image ?? selectedProperty?.image ?? '/condominium.webp'})` }}
-        role="img"
-        aria-label={selectedHouse?.name ?? selectedProperty?.name ?? 'Keine Objekte'}
-      >
-        <div className={styles.imageOverlay}>
-          <div className={styles.heroText}>
-            <span className={styles.orgName}>{selectedHouse?.name ?? 'Haus'}</span>
-            <span className={styles.propertyMeta}>
-              {propertyError || selectedHouse?.address || 'Keine Adresse hinterlegt'}
-            </span>
-          </div>
-          {selectedHouse?.mapsUrl && (
-            <a
-              className={styles.mapLink}
-              href={selectedHouse.mapsUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`${selectedHouse.name} in Google Maps öffnen`}
-            >
-              Karte
-            </a>
-          )}
         </div>
       </div>
 

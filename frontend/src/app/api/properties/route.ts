@@ -36,11 +36,10 @@ type Unit = {
 const DB_NAME = process.env.MONGODB_DB ?? process.env.MONGO_DB ?? 'buena'
 const PROPERTY_IMAGE = '/condominium.webp'
 const HOUSE_IMAGES = [
-  '/property-house-12.svg',
-  '/property-house-14.svg',
-  '/property-house-16.svg',
-  '/property-house-18.svg',
-  '/property-house-20.svg',
+  '/haus1.png',
+  '/haus2.png',
+  '/haus3.png',
+  '/haus4.png',
 ]
 const PROPERTY_TYPES = ['liegenschaft', 'objekt', 'immobilie', 'weg', 'property']
 const BUILDING_TYPES = ['haus', 'gebaeude', 'gebäude']
