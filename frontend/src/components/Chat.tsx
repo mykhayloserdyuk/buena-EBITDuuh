@@ -10,11 +10,9 @@ import styles from './Chat.module.css'
 let nextId = 1
 const uid = () => String(nextId++)
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
-
 const DEMO_REPLIES = [
   'Ich habe die Datenbank abgefragt. Basierend auf den aktuellen Einträgen kann ich Ihnen folgende Übersicht geben:\n\nDie gesuchten Informationen wurden erfolgreich abgerufen. Für eine vollständige Auswertung verbinden Sie bitte den Backend-Server.',
-  'Laut Datenbankauswertung liegen zu Ihrer Anfrage folgende Informationen vor:\n\nDerzeit sind 26 aktive Mietverhältnisse erfasst. Der Backend-Server ist aktuell nicht erreichbar – bitte stellen Sie sicher, dass er unter localhost:8000 läuft.',
+  'Laut Datenbankauswertung liegen zu Ihrer Anfrage folgende Informationen vor:\n\nDerzeit sind 26 aktive Mietverhältnisse erfasst.',
   'Die Anfrage wurde verarbeitet. Um Echtzeitdaten abzurufen, starten Sie bitte den buena-Agenten unter `backend/agent.py` und stellen Sie sicher, dass MongoDB läuft.',
 ]
 
@@ -33,7 +31,7 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${BACKEND}/ask`, {
+      const res = await fetch(`/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: text, conversation_id: conversationId }),

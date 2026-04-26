@@ -754,3 +754,98 @@ resource "kubectl_manifest" "image_update_automation" {
     kubectl_manifest.image_policy_frontend,
   ]
 }
+
+# ---------------------------------------------------------------------------
+# ingress-nginx — single external LoadBalancer for all HTTP/S traffic
+# ---------------------------------------------------------------------------
+
+resource "kubernetes_namespace" "ingress_nginx" {
+  metadata {
+    name = "ingress-nginx"
+  }
+
+  depends_on = [google_container_node_pool.main]
+}
+
+resource "helm_release" "ingress_nginx" {
+  name       = "ingress-nginx"
+  repository = "https://kubernetes.github.io/ingress-nginx"
+  chart      = "ingress-nginx"
+  version    = "4.10.1"
+  namespace  = kubernetes_namespace.ingress_nginx.metadata[0].name
+
+  set {
+    name  = "controller.service.type"
+    value = "LoadBalancer"
+  }
+  # Preserve client IP through GCP LB
+  set {
+    name  = "controller.service.externalTrafficPolicy"
+    value = "Local"
+  }
+
+  depends_on = [kubernetes_namespace.ingress_nginx]
+}
+
+# ---------------------------------------------------------------------------
+# cert-manager — automatic Let's Encrypt TLS via ACME HTTP-01
+# ---------------------------------------------------------------------------
+
+resource "kubernetes_namespace" "cert_manager" {
+  metadata {
+    name = "cert-manager"
+  }
+
+  depends_on = [google_container_node_pool.main]
+}
+
+resource "helm_release" "cert_manager" {
+  name       = "cert-manager"
+  repository = "https://charts.jetstack.io"
+  chart      = "cert-manager"
+  version    = "v1.15.3"
+  namespace  = kubernetes_namespace.cert_manager.metadata[0].name
+
+  set {
+    name  = "crds.enabled"
+    value = "true"
+  }
+
+  depends_on = [kubernetes_namespace.cert_manager]
+}
+
+# ClusterIssuer — Let's Encrypt production (HTTP-01 challenge via ingress-nginx)
+resource "kubectl_manifest" "letsencrypt_prod" {
+  yaml_body = yamlencode({
+    apiVersion = "cert-manager.io/v1"
+    kind       = "ClusterIssuer"
+    metadata = {
+      name = "letsencrypt-prod"
+    }
+    spec = {
+      acme = {
+        server = "https://acme-v02.api.letsencrypt.org/directory"
+        email  = var.letsencrypt_email
+        privateKeySecretRef = { name = "letsencrypt-prod-key" }
+        solvers = [{
+          http01 = {
+            ingress = { ingressClassName = "nginx" }
+          }
+        }]
+      }
+    }
+  })
+
+  depends_on = [helm_release.cert_manager, helm_release.ingress_nginx]
+}
+
+variable "letsencrypt_email" {
+  description = "Email for Let's Encrypt certificate notifications (set via TF_VAR_letsencrypt_email)."
+  type        = string
+}
+
+# Expose the ingress-nginx LB IP so you can point your DNS A record to it
+output "ingress_ip" {
+  description = "Point buena-platform.com A record to this IP"
+  value       = "Run: kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}'"
+}
