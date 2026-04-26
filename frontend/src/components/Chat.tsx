@@ -22,6 +22,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [conversationId, setConversationId] = useState(() => crypto.randomUUID())
 
   const handleSend = useCallback(async (text: string) => {
     const userMsg: Message = { id: uid(), role: 'user', content: text }
@@ -35,7 +36,7 @@ export default function Chat() {
       const res = await fetch(`${BACKEND}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: text, conversation_id: conversationId }),
       })
 
       if (!res.ok) throw new Error('Backend error')
@@ -72,6 +73,7 @@ export default function Chat() {
     setMessages([])
     setInputValue('')
     setLoading(false)
+    setConversationId(crypto.randomUUID())
   }, [])
 
   const handleSuggest = useCallback((text: string) => {
