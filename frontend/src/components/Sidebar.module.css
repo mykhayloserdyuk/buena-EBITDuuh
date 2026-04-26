@@ -5,6 +5,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+.selectorStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .dropdownTrigger {
   width: 100%;
   display: flex;
@@ -20,6 +26,11 @@
 
 .dropdownTrigger:hover {
   border-color: var(--stone-300);
+}
+
+.dropdownTrigger:disabled {
+  cursor: default;
+  opacity: 0.65;
 }
 
 .dropdownLabel {
@@ -53,6 +64,54 @@
   box-shadow: var(--shadow-md);
   z-index: 20;
   overflow: hidden;
+}
+
+.dropdownMenuTall {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.pathBox {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.pathStep,
+.pathCurrent {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pathStep {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.pathSeparator {
+  color: var(--stone-600);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.pathCurrent {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: left;
+}
+
+.pathCurrent:disabled {
+  opacity: 0.65;
 }
 
 .dropdownItem {
@@ -131,6 +190,51 @@
   font-weight: 400;
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+/* ── Fixed metrics ── */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.metric,
+.metricWide {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.metricWide {
+  grid-column: span 1;
+}
+
+.metricLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--stone-600);
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+
+.metricValue {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Suggestions ── */
