@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
-from agent import agent
+from agent import openui_agent
 from callbacks import _callback
 from db import ensure_indexes
 from ingest_file import ingest
@@ -81,6 +81,7 @@ def _ingest_dir(files: list[str]) -> list[dict]:
 
 class AskRequest(BaseModel):
     question: str
+    conversation_id: str
 
 
 def _text(content) -> str:
@@ -95,9 +96,9 @@ def _text(content) -> str:
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    result = agent.invoke(
+    result = openui_agent.invoke(
         {"messages": [HumanMessage(content=req.question)]},
-        config=RunnableConfig(callbacks=[_callback]),
+        config=RunnableConfig(callbacks=[_callback], configurable={"thread_id": req.conversation_id}),
     )
 
     tool_calls = []
@@ -121,16 +122,17 @@ def ask(req: AskRequest):
         ),
         "",
     )
-    return {"response": response, "tool_calls": tool_calls}
+    return {"type": "openui", "response": response, "tool_calls": tool_calls}
 
 
 @app.post("/ask/stream")
 async def ask_stream(req: AskRequest):
     async def generate():
         try:
-            async for event in agent.astream_events(
+            async for event in openui_agent.astream_events(
                 {"messages": [HumanMessage(content=req.question)]},
                 version="v2",
+                config=RunnableConfig(configurable={"thread_id": req.conversation_id}),
             ):
                 kind = event["event"]
                 if kind == "on_tool_start":
