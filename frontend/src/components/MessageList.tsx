@@ -110,7 +110,17 @@ export default function MessageList({ messages, onSend }: MessageListProps) {
                 response={msg.content}
                 library={openuiChatLibrary}
                 isStreaming={false}
-                onAction={e => e.type === 'continue_conversation' && onSend?.(e.humanFriendlyMessage)}
+                onAction={e => {
+                if (e.type !== 'continue_conversation') return
+                if (e.formState && Object.keys(e.formState).length > 0) {
+                  const fields = Object.entries(e.formState)
+                    .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+                    .join('\n')
+                  onSend?.(`${e.humanFriendlyMessage}\n\nForm data:\n${fields}`)
+                } else {
+                  onSend?.(e.humanFriendlyMessage)
+                }
+              }}
               />
             ) : (
               <div className={`${styles.bubble} ${styles.bubbleAssistant} ${styles.markdown}`}>

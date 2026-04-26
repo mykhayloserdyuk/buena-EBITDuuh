@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 # Wie viele Mieteinnahmen werde ich nächstes Jahr machen mit meinem Haus? => Chart mit monatlichen Einnahmen
-# Zeige mir den Emailverlauf zwischen Vermieter A und Mieter X => Markdown like mit Emails 
+# Zeige mir den Emailverlauf zwischen Vermieter A und Mieter X => Markdown like mit Emails
 # Welche offenen Items habe ich für Haus, Wohnung etc.? => To do liste mit offenen Items, z.B. "Rechnung von Handwerker Y bezahlen", "Mieter Z wegen Lärm beschweren", etc.
 @tool
 def query(command_json: str) -> str:
@@ -115,7 +115,7 @@ agent = create_react_agent(
     checkpointer=_memory,
 )
 
-_OPENUI_SYS = (Path(__file__).parent / "openui_prompt.txt").read_text()
+_OPENUI_PROMPT_PATH = Path(__file__).parent / "openui_prompt.txt"
 
 
 def _inject_schema_openui(state: dict) -> list:
@@ -128,7 +128,7 @@ def _inject_schema_openui(state: dict) -> list:
         ensure_ascii=False,
         indent=2,
     )
-    system = _SYSTEM.format(schema=schema) + "\n\n" + _OPENUI_SYS
+    system = _SYSTEM.format(schema=schema) + "\n\n" + _OPENUI_PROMPT_PATH.read_text()
     return [SystemMessage(content=system)] + state["messages"]
 
 
