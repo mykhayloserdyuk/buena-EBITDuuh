@@ -3,8 +3,11 @@ import './globals.css'
 import '@openuidev/react-ui/styles/index.css'
 
 export const metadata: Metadata = {
-  title: 'buena · Hausverwaltung',
+  title: 'Platform Buena',
   description: 'Intelligente Hausverwaltung – fragen Sie einfach.',
+  icons: {
+    icon: '/logo.png',
+  },
 }
 
 export default function RootLayout({

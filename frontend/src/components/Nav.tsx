@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import styles from './Nav.module.css'
 
 interface NavProps {
@@ -10,22 +11,13 @@ export default function Nav({ onNewChat }: NavProps) {
   return (
     <nav className={styles.nav}>
       <div className={styles.left}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          fill="none"
-          viewBox="0 0 38 38"
-          aria-hidden="true"
+        <Image
+          src="/logo.png"
+          alt="buena logo"
+          width={22}
+          height={22}
           className={styles.icon}
-        >
-          <path
-            fill="currentColor"
-            fillRule="evenodd"
-            d="M19 0c1.147 0 2.1.885 2.185 2.03l.068.917a10.44 10.44 0 0 1 4.2-.876c5.786 0 10.476 4.69 10.476 10.476a10.44 10.44 0 0 1-.877 4.2l.919.068a2.19 2.19 0 0 1 0 4.37l-.918.068a10.44 10.44 0 0 1 .876 4.2c0 5.786-4.69 10.476-10.476 10.476a10.44 10.44 0 0 1-4.2-.877l-.068.919a2.19 2.19 0 0 1-4.37 0l-.068-.918a10.44 10.44 0 0 1-4.2.876c-5.786 0-10.476-4.69-10.476-10.476 0-1.494.313-2.914.876-4.2l-.918-.068a2.191 2.191 0 0 1 0-4.37l.918-.068a10.44 10.44 0 0 1-.876-4.2c0-5.786 4.69-10.476 10.476-10.476 1.493 0 2.914.313 4.2.876l.068-.918A2.191 2.191 0 0 1 19 0ZM7.924 19l-1.38 1.762a7.573 7.573 0 0 0-1.615 4.691 7.618 7.618 0 0 0 7.618 7.618 7.573 7.573 0 0 0 4.691-1.615L19 30.076l1.38-1.38a7.573 7.573 0 0 0 4.691 1.615 7.618 7.618 0 0 0 7.618-7.618 7.573 7.573 0 0 0-1.615-4.691L30.076 19l1.38-1.762a7.573 7.573 0 0 0 1.615-4.691 7.618 7.618 0 0 0-7.618-7.618 7.573 7.573 0 0 0-4.691 1.615L19 7.924l-1.762-1.38a7.573 7.573 0 0 0-4.691-1.615 7.618 7.618 0 0 0-7.618 7.618 7.57 7.57 0 0 0 1.615 4.691L7.924 19Z"
-            clipRule="evenodd"
-          />
-        </svg>
+        />
         <span className={styles.wordmark}>buena</span>
         <span className={styles.separator}>·</span>
         <span className={styles.subtitle}>Hausverwaltung</span>
