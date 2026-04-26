@@ -1,21 +1,16 @@
-name: Build Backend
+name: Build Backend Base Image
 
 on:
   push:
     branches: [main]
     paths:
-      - 'backend/**'
-      - '!backend/requirements.base.txt'
-      - '!backend/Dockerfile.base'
-  pull_request:
-    paths:
-      - 'backend/**'
-      - '!backend/requirements.base.txt'
-      - '!backend/Dockerfile.base'
+      - 'backend/requirements.base.txt'
+      - 'backend/Dockerfile.base'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE: mykhayloserdyuk/buena-backend
+  IMAGE: mykhayloserdyuk/buena-backend-base
 
 jobs:
   build:
@@ -37,10 +32,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
-      - name: Build (no push)
+      - name: Build and push base image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          push: false
+          file: ./backend/Dockerfile.base
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,8 +1,8 @@
-FROM python:3.12-slim
+FROM ghcr.io/mykhayloserdyuk/buena-backend-base:latest
 
 WORKDIR /app
 
-# Install dependencies first (cached layer)
+# Install lightweight app dependencies on top of the base
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
