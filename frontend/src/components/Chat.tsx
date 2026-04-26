@@ -12,8 +12,7 @@ const uid = () => String(nextId++)
 
 async function fetchAgentReply(question: string): Promise<string> {
   try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
-    const res = await fetch(`${backendUrl}/ask`, {
+    const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question }),

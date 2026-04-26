@@ -10,6 +10,14 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.31"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.14"
+    }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
+    }
   }
 }
 
@@ -405,3 +413,318 @@ resource "kubernetes_secret" "github_actions_token" {
 
   type = "kubernetes.io/service-account-token"
 }
+
+# ---------------------------------------------------------------------------
+# Helm provider — wired to the same GKE cluster
+# ---------------------------------------------------------------------------
+
+provider "helm" {
+  kubernetes {
+    host                   = "https://${google_container_cluster.main.endpoint}"
+    token                  = data.google_client_config.default.access_token
+    cluster_ca_certificate = base64decode(google_container_cluster.main.master_auth[0].cluster_ca_certificate)
+  }
+}
+
+provider "kubectl" {
+  host                   = "https://${google_container_cluster.main.endpoint}"
+  token                  = data.google_client_config.default.access_token
+  cluster_ca_certificate = base64decode(google_container_cluster.main.master_auth[0].cluster_ca_certificate)
+  load_config_file       = false
+}
+
+# ---------------------------------------------------------------------------
+# App secrets — single source of truth in infra/.env, managed by Terraform.
+# Deployments reference these via secretKeyRef; never hardcoded in manifests.
+# ---------------------------------------------------------------------------
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key"
+  type        = string
+  sensitive   = true
+}
+
+variable "mongo_uri" {
+  description = "MongoDB connection URI"
+  type        = string
+  sensitive   = true
+}
+
+resource "kubernetes_secret" "buena_app_secrets" {
+  metadata {
+    name      = "buena-app-secrets"
+    namespace = kubernetes_namespace.buena.metadata[0].name
+  }
+
+  data = {
+    MODEL_PROVIDER = "GEMINI"
+    GEMINI_API_KEY = var.gemini_api_key
+    MONGO_URI      = var.mongo_uri
+  }
+
+  depends_on = [kubernetes_namespace.buena]
+}
+
+# ---------------------------------------------------------------------------
+# GHCR image pull secret — lets the cluster pull from ghcr.io/mykhayloserdyuk
+# ---------------------------------------------------------------------------
+
+variable "pat" {
+  description = "lasserich's GitHub PAT (scopes: repo + write:packages) — used for GHCR image pulls and Flux git access."
+  type        = string
+  sensitive   = true
+}
+
+resource "kubernetes_secret" "ghcr_credentials" {
+  metadata {
+    name      = "ghcr-credentials"
+    namespace = kubernetes_namespace.buena.metadata[0].name
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = "mykhayloserdyuk"
+          password = var.pat
+          auth     = base64encode("mykhayloserdyuk:${var.pat}")
+        }
+      }
+    })
+  }
+
+  depends_on = [kubernetes_namespace.buena]
+}
+
+# Same secret in flux-system namespace for Flux ImageRepository pulls
+resource "kubernetes_secret" "ghcr_credentials_flux" {
+  metadata {
+    name      = "ghcr-credentials"
+    namespace = "flux-system"
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = "lasserich"
+          password = var.pat
+          auth     = base64encode("lasserich:${var.pat}")
+        }
+      }
+    })
+  }
+
+  depends_on = [helm_release.flux]
+}
+
+# Patch default service accounts to use the pull secret
+resource "kubernetes_default_service_account" "buena" {
+  metadata {
+    namespace = kubernetes_namespace.buena.metadata[0].name
+  }
+  image_pull_secret {
+    name = kubernetes_secret.ghcr_credentials.metadata[0].name
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Flux bootstrap via Helm
+# ---------------------------------------------------------------------------
+
+resource "kubernetes_namespace" "flux_system" {
+  metadata {
+    name = "flux-system"
+  }
+
+  depends_on = [google_container_node_pool.main]
+}
+
+resource "helm_release" "flux" {
+  name       = "flux"
+  repository = "https://fluxcd-community.github.io/helm-charts"
+  chart      = "flux2"
+  version    = "2.13.0"
+  namespace  = kubernetes_namespace.flux_system.metadata[0].name
+
+  # Enable image reflector + automation controllers for auto image tag updates
+  set {
+    name  = "imageAutomationController.create"
+    value = "true"
+  }
+  set {
+    name  = "imageReflectorController.create"
+    value = "true"
+  }
+
+  depends_on = [kubernetes_namespace.flux_system]
+}
+
+
+# GitRepository + Kustomization applied after Flux CRDs exist
+resource "kubernetes_secret" "flux_github_credentials" {
+  metadata {
+    name      = "flux-github-credentials"
+    namespace = "flux-system"
+  }
+
+  # lasserich's PAT — needs repo (read) + contents:write (for image tag commits)
+  # on the mykhayloserdyuk/buena-EBITDuuh repository
+  data = {
+    username = "lasserich"
+    password = var.pat
+  }
+
+  depends_on = [kubernetes_namespace.flux_system]
+}
+
+resource "kubectl_manifest" "flux_git_repository" {
+  yaml_body = yamlencode({
+    apiVersion = "source.toolkit.fluxcd.io/v1"
+    kind       = "GitRepository"
+    metadata = {
+      name      = "buena"
+      namespace = "flux-system"
+    }
+    spec = {
+      interval  = "1m"
+      url       = "https://github.com/${local.github_repo}"
+      ref       = { branch = "main" }
+      secretRef = { name = "flux-github-credentials" }
+    }
+  })
+
+  depends_on = [helm_release.flux, kubernetes_secret.flux_github_credentials]
+}
+
+resource "kubectl_manifest" "flux_kustomization" {
+  yaml_body = yamlencode({
+    apiVersion = "kustomize.toolkit.fluxcd.io/v1"
+    kind       = "Kustomization"
+    metadata = {
+      name      = "buena-app"
+      namespace = "flux-system"
+    }
+    spec = {
+      interval        = "1m"
+      path            = "./infra/k8s"
+      prune           = true
+      sourceRef       = { kind = "GitRepository", name = "buena" }
+      targetNamespace = "buena"
+    }
+  })
+
+  depends_on = [kubectl_manifest.flux_git_repository]
+}
+
+# ---------------------------------------------------------------------------
+# Flux image automation — ImageRepository + ImagePolicy + ImageUpdateAutomation
+# These watch GHCR for new sha-* tags and commit updated image refs back to git
+# ---------------------------------------------------------------------------
+
+resource "kubectl_manifest" "flux_image_repo_backend" {
+  yaml_body = yamlencode({
+    apiVersion = "image.toolkit.fluxcd.io/v1beta2"
+    kind       = "ImageRepository"
+    metadata = {
+      name      = "buena-backend"
+      namespace = "flux-system"
+    }
+    spec = {
+      image    = "ghcr.io/mykhayloserdyuk/buena-backend"
+      interval = "1m"
+      secretRef = { name = "ghcr-credentials" }
+    }
+  })
+
+  depends_on = [helm_release.flux, kubernetes_secret.ghcr_credentials_flux]
+}
+
+resource "kubectl_manifest" "flux_image_policy_backend" {
+  yaml_body = yamlencode({
+    apiVersion = "image.toolkit.fluxcd.io/v1beta2"
+    kind       = "ImagePolicy"
+    metadata = {
+      name      = "buena-backend"
+      namespace = "flux-system"
+    }
+    spec = {
+      imageRepositoryRef = { name = "buena-backend" }
+      filterTags = { pattern = "^sha-[a-f0-9]+" }
+      policy = { alphabetical = { order = "asc" } }
+    }
+  })
+
+  depends_on = [kubectl_manifest.flux_image_repo_backend]
+}
+
+resource "kubectl_manifest" "flux_image_repo_frontend" {
+  yaml_body = yamlencode({
+    apiVersion = "image.toolkit.fluxcd.io/v1beta2"
+    kind       = "ImageRepository"
+    metadata = {
+      name      = "buena-frontend"
+      namespace = "flux-system"
+    }
+    spec = {
+      image    = "ghcr.io/mykhayloserdyuk/buena-frontend"
+      interval = "1m"
+      secretRef = { name = "ghcr-credentials" }
+    }
+  })
+
+  depends_on = [helm_release.flux, kubernetes_secret.ghcr_credentials_flux]
+}
+
+resource "kubectl_manifest" "flux_image_policy_frontend" {
+  yaml_body = yamlencode({
+    apiVersion = "image.toolkit.fluxcd.io/v1beta2"
+    kind       = "ImagePolicy"
+    metadata = {
+      name      = "buena-frontend"
+      namespace = "flux-system"
+    }
+    spec = {
+      imageRepositoryRef = { name = "buena-frontend" }
+      filterTags = { pattern = "^sha-[a-f0-9]+" }
+      policy = { alphabetical = { order = "asc" } }
+    }
+  })
+
+  depends_on = [kubectl_manifest.flux_image_repo_frontend]
+}
+
+resource "kubectl_manifest" "flux_image_update_automation" {
+  yaml_body = yamlencode({
+    apiVersion = "image.toolkit.fluxcd.io/v1beta1"
+    kind       = "ImageUpdateAutomation"
+    metadata = {
+      name      = "buena"
+      namespace = "flux-system"
+    }
+    spec = {
+      interval = "1m"
+      sourceRef = { kind = "GitRepository", name = "buena" }
+      git = {
+        checkout = { ref = { branch = "main" } }
+        commit = {
+          author          = { name = "flux", email = "flux@buena" }
+          messageTemplate = "chore: update images to {{range .Updated.Images}}{{.}}{{end}}"
+        }
+        push = { branch = "main" }
+      }
+      update = { strategy = "Setters", path = "./infra/k8s" }
+    }
+  })
+
+  depends_on = [
+    kubectl_manifest.flux_git_repository,
+    kubectl_manifest.flux_image_policy_backend,
+    kubectl_manifest.flux_image_policy_frontend,
+  ]
+}
+

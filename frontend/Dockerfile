@@ -7,9 +7,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_* vars are baked in at build time; BACKEND_URL is read at runtime by next.config.ts
-ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+# BACKEND_URL is read at runtime by next.config.ts — no build-time args needed
 RUN npm run build
 
 FROM node:20-alpine AS runner

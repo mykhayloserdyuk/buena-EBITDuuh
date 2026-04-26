@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: buena
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/mykhayloserdyuk/buena-backend:latest # {"$imagepolicy": "flux-system:buena-backend"}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MODEL_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: buena-app-secrets
+                  key: MODEL_PROVIDER
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: buena-app-secrets
+                  key: GEMINI_API_KEY
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: buena-app-secrets
+                  key: MONGO_URI
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: buena
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

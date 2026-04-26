@@ -3,7 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from dotenv import load_dotenv
+import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -13,8 +13,6 @@ from agent import agent
 from callbacks import _callback
 from db import ensure_indexes
 from ingest_file import ingest
-
-load_dotenv(Path(__file__).parent / ".env")
 
 _RAW_DATA = Path(os.environ.get("RAW_DATA_PATH", "../raw-data"))
 _SKIP = {".DS_Store", "incremental_manifest.json", "stammdaten.json"}

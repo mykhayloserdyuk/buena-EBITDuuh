@@ -1,10 +1,7 @@
 import os
-from pathlib import Path
 
-from dotenv import load_dotenv
+import env  # loads .env and .env.infra
 from pymongo import MongoClient
-
-load_dotenv(Path(__file__).parent / ".env")
 
 _db = MongoClient(os.environ["MONGO_URI"])["buena"]
 

@@ -1,27 +1,41 @@
 services:
+  mongo:
+    image: mongo:7.0
+    env_file:
+      # Provides MONGO_INITDB_ROOT_USERNAME and MONGO_INITDB_ROOT_PASSWORD
+      # directly to the container — no interpolation needed.
+      - ./infra/.env
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend/.env.local   # copy from .env.local and fill in secrets
-    environment:
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-GEMINI}
-      RAW_DATA_PATH: /raw-data
     volumes:
+      # App secrets (GEMINI_API_KEY, MODEL_PROVIDER, local MONGO_URI override)
+      # — read by load_dotenv(".env") inside the container
+      - ./backend/.env:/app/.env:ro
+      # Infra secrets (cloud MONGO_URI, MINIO_*)
+      # — read by load_dotenv(".env.infra") inside the container
+      - ./infra/.env:/app/.env.infra:ro
       - ./raw-data:/raw-data:ro
+    environment:
+      RAW_DATA_PATH: /raw-data
+    depends_on:
+      - mongo
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        # NEXT_PUBLIC_* vars are baked into the JS bundle at build time.
-        # In local compose the browser fetches from localhost:8000 directly.
-        NEXT_PUBLIC_BACKEND_URL: "http://localhost:8000"
+    build: ./frontend
     ports:
       - "3000:3000"
-    environment:
-      # Server-side proxy target used by next.config.ts rewrites (/api/* → backend)
-      BACKEND_URL: "http://backend:8000"
+    volumes:
+      # Provides BACKEND_URL at runtime for next.config.ts server-side rewrites
+      - ./frontend/.env.local:/app/.env.local:ro
     depends_on:
       - backend
+
+volumes:
+  mongo-data:

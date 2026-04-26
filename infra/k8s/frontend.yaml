@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: buena
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/mykhayloserdyuk/buena-frontend:latest # {"$imagepolicy": "flux-system:buena-frontend"}
+          ports:
+            - containerPort: 3000
+          env:
+            # Next.js route handler reads this at request time to proxy /api/ask → backend
+            # backend is ClusterIP only — never exposed to the internet
+            - name: BACKEND_URL
+              value: "http://backend.buena.svc.cluster.local:8000"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: buena
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: LoadBalancer

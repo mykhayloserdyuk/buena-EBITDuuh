@@ -1,0 +1,86 @@
+# NOTE: This file is documentation only — these resources are created by Terraform (main.tf).
+# Do NOT apply this file with kubectl or add it to a Kustomization.
+# Edit the kubernetes_manifest resources in infra/main.tf instead.
+---
+# Watches ghcr.io for new tags on the backend image
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: buena-backend
+  namespace: flux-system
+spec:
+  image: ghcr.io/mykhayloserdyuk/buena-backend
+  interval: 1m
+  secretRef:
+    name: ghcr-credentials
+---
+# Selects the latest sha-* tag by alphabetical order on the sha- prefix.
+# Tags are sha-<short-sha> produced by docker/metadata-action; alphabetical
+# ascending gives newest push because git SHAs are hex and commits are
+# ordered by time in the repository. For a strictly time-ordered policy
+# switch to semver tags (e.g. 0.0.<yyyymmddHHMMSS>).
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: buena-backend
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: buena-backend
+  filterTags:
+    pattern: '^sha-[a-f0-9]+'
+  policy:
+    alphabetical:
+      order: asc
+---
+# Watches ghcr.io for new tags on the frontend image
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: buena-frontend
+  namespace: flux-system
+spec:
+  image: ghcr.io/mykhayloserdyuk/buena-frontend
+  interval: 1m
+  secretRef:
+    name: ghcr-credentials
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: buena-frontend
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: buena-frontend
+  filterTags:
+    pattern: '^sha-[a-f0-9]+'
+  policy:
+    alphabetical:
+      order: asc
+---
+# Commits updated image tags back to the repo so git stays the source of truth
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: buena
+  namespace: flux-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: buena
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: flux
+        email: flux@buena
+      messageTemplate: "chore: update images to {{range .Updated.Images}}{{.}}{{end}}"
+    push:
+      branch: main
+  update:
+    strategy: Setters
+    path: ./infra/k8s
