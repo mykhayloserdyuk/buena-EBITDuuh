@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#b7c9ce"/><stop offset="1" stop-color="#6c7c75"/></linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c9c4b8"/><stop offset="1" stop-color="#7f8178"/></linearGradient>
+  </defs>
+  <rect width="900" height="620" fill="url(#sky)"/>
+  <rect y="455" width="900" height="165" fill="#36413c"/>
+  <path d="M142 118h616v472H142z" fill="url(#wall)"/>
+  <path d="M142 118h616v34H142z" fill="#4b514f"/>
+  <g fill="#293f4e">
+    <rect x="200" y="184" width="70" height="58" rx="5"/><rect x="314" y="184" width="70" height="58" rx="5"/><rect x="428" y="184" width="70" height="58" rx="5"/><rect x="542" y="184" width="70" height="58" rx="5"/>
+    <rect x="200" y="288" width="70" height="58" rx="5"/><rect x="314" y="288" width="70" height="58" rx="5"/><rect x="428" y="288" width="70" height="58" rx="5"/><rect x="542" y="288" width="70" height="58" rx="5"/>
+    <rect x="200" y="392" width="70" height="58" rx="5"/><rect x="314" y="392" width="70" height="58" rx="5"/><rect x="428" y="392" width="70" height="58" rx="5"/><rect x="542" y="392" width="70" height="58" rx="5"/>
+  </g>
+  <rect x="385" y="484" width="130" height="106" rx="6" fill="#3b312d"/>
+</svg>

@@ -15,6 +15,9 @@ type House = {
   id: string
   name: string
   meta: string
+  image: string
+  address?: string
+  mapsUrl?: string
   unitCount?: number
   totalArea?: number
   units: Unit[]
@@ -202,19 +205,40 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
 
       <div
         className={styles.imageWrap}
-        style={{ backgroundImage: `url(${selectedProperty?.image ?? '/condominium.webp'})` }}
+        style={{ backgroundImage: `url(${selectedHouse?.image ?? selectedProperty?.image ?? '/condominium.webp'})` }}
         role="img"
-        aria-label={selectedProperty?.name ?? 'Keine Objekte'}
+        aria-label={selectedHouse?.name ?? selectedProperty?.name ?? 'Keine Objekte'}
       >
         <div className={styles.imageOverlay}>
-          <span className={styles.orgName}>Din Property Management GmbH</span>
-          <span className={styles.propertyMeta}>
-            {propertyError || (
-              selectedProperty
-                ? [selectedHouse?.name, selectedUnit?.name, selectedUnit?.location].filter(Boolean).join(' · ')
-                : 'Keine Objekte gefunden'
-            )}
-          </span>
+          <div className={styles.heroText}>
+            <span className={styles.orgName}>{selectedHouse?.name ?? 'Haus'}</span>
+            <span className={styles.propertyMeta}>
+              {propertyError || selectedHouse?.address || 'Keine Adresse hinterlegt'}
+            </span>
+          </div>
+          {selectedHouse?.mapsUrl && (
+            <a
+              className={styles.mapLink}
+              href={selectedHouse.mapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`${selectedHouse.name} in Google Maps öffnen`}
+            >
+              Karte
+            </a>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.detailPanel}>
+        <div className={styles.detailHeader}>
+          <span className={styles.detailEyebrow}>Aktuelle Auswahl</span>
+          <span className={styles.detailTitle}>{selectedUnit?.name ?? 'Keine Einheit'}</span>
+        </div>
+        <div className={styles.detailPath}>
+          <span>{selectedHouse?.name ?? 'Haus'}</span>
+          <span>/</span>
+          <strong>{selectedUnit?.location ?? selectedUnit?.name ?? '-'}</strong>
         </div>
       </div>
 
