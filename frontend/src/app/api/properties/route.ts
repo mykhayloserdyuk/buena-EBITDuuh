@@ -14,6 +14,9 @@ type House = {
   id: string
   name: string
   meta: string
+  image: string
+  address?: string
+  mapsUrl?: string
   unitCount?: number
   totalArea?: number
   units: Unit[]
@@ -32,6 +35,13 @@ type Unit = {
 
 const DB_NAME = process.env.MONGODB_DB ?? process.env.MONGO_DB ?? 'buena'
 const PROPERTY_IMAGE = '/condominium.webp'
+const HOUSE_IMAGES = [
+  '/property-house-12.svg',
+  '/property-house-14.svg',
+  '/property-house-16.svg',
+  '/property-house-18.svg',
+  '/property-house-20.svg',
+]
 const PROPERTY_TYPES = ['liegenschaft', 'objekt', 'immobilie', 'weg', 'property']
 const BUILDING_TYPES = ['haus', 'gebaeude', 'gebäude']
 const UNIT_TYPES = ['einheit']
@@ -95,6 +105,19 @@ function unitMeta(doc: Document) {
 function toNumber(value: unknown) {
   const next = Number(value)
   return Number.isFinite(next) ? next : undefined
+}
+
+function houseNumber(houseId: string) {
+  return houseId.replace(/^HAUS-/, '')
+}
+
+function mapsUrl(address?: string) {
+  if (!address) return undefined
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+}
+
+function presentationAddress(houseId: string) {
+  return `Immanuelkirchstraße ${houseNumber(houseId)}, 10405 Berlin`
 }
 
 async function loadStructuredStammdatenProperties(): Promise<Property[]> {
@@ -186,17 +209,24 @@ async function loadEntityProperties(): Promise<Property[]> {
     houseMap.set(houseId, house)
   }
 
-  const houses = [...houseMap.entries()].map(([houseId, house]) => ({
-    id: houseId,
-    name: `Haus ${houseId.replace(/^HAUS-/, '')}`,
-    meta: [
-      numberLabel(house.units.length, 'Einheit', 'Einheiten'),
-      house.totalArea > 0 ? `${Math.round(house.totalArea)} qm` : '',
-    ].filter(Boolean).join(' · '),
-    unitCount: house.units.length,
-    totalArea: Math.round(house.totalArea),
-    units: house.units,
-  }))
+  const houses = [...houseMap.entries()].map(([houseId, house], index) => {
+    const address = presentationAddress(houseId)
+
+    return {
+      id: houseId,
+      name: `Haus ${houseNumber(houseId)}`,
+      meta: [
+        numberLabel(house.units.length, 'Einheit', 'Einheiten'),
+        house.totalArea > 0 ? `${Math.round(house.totalArea)} qm` : '',
+      ].filter(Boolean).join(' · '),
+      image: HOUSE_IMAGES[index % HOUSE_IMAGES.length],
+      address,
+      mapsUrl: mapsUrl(address),
+      unitCount: house.units.length,
+      totalArea: Math.round(house.totalArea),
+      units: house.units,
+    }
+  })
 
   const buildings = houses.length
   const units = unitDocs.length
