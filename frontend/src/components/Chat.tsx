@@ -32,58 +32,29 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const res = await fetch(`${BACKEND}/ask/stream`, {
+      const res = await fetch(`${BACKEND}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: text }),
       })
 
-      if (!res.ok || !res.body) throw new Error('Backend error')
+      if (!res.ok) throw new Error('Backend error')
+      const data = await res.json()
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const evt = JSON.parse(line.slice(6))
-            if (evt.type === 'token') {
-              setMessages(prev => prev.map(m =>
-                m.id === replyId ? { ...m, content: m.content + evt.text, loading: false } : m
-              ))
-            } else if (evt.type === 'tool_start') {
-              setMessages(prev => prev.map(m =>
-                m.id === replyId
-                  ? { ...m, toolCalls: [...(m.toolCalls ?? []), { name: evt.name, status: 'running' as const }] }
-                  : m
-              ))
-            } else if (evt.type === 'tool_end') {
-              setMessages(prev => prev.map(m => {
-                if (m.id !== replyId) return m
-                let found = false
-                return {
-                  ...m,
-                  toolCalls: (m.toolCalls ?? []).map(tc => {
-                    if (!found && tc.name === evt.name && tc.status === 'running') {
-                      found = true
-                      return { ...tc, status: 'done' as const }
-                    }
-                    return tc
-                  }),
-                }
-              }))
+      setMessages(prev => prev.map(m =>
+        m.id === replyId
+          ? {
+              ...m,
+              content: data.response,
+              responseType: data.type as 'text' | 'openui',
+              loading: false,
+              toolCalls: (data.tool_calls ?? []).map((tc: { tool: string }) => ({
+                name: tc.tool,
+                status: 'done' as const,
+              })),
             }
-          } catch { /* skip malformed lines */ }
-        }
-      }
+          : m
+      ))
     } catch {
       const demo = DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)]
       setMessages(prev => prev.map(m =>
@@ -114,7 +85,7 @@ export default function Chat() {
         <Sidebar onSuggest={handleSuggest} />
         <div className={styles.main}>
           <div className={styles.messages}>
-            <MessageList messages={messages} />
+            <MessageList messages={messages} onSend={handleSend} />
           </div>
           <div className={styles.inputArea}>
             <ChatInput

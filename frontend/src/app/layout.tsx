@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import '@openuidev/react-ui/styles/index.css'
 
 export const metadata: Metadata = {
   title: 'buena · Hausverwaltung',
