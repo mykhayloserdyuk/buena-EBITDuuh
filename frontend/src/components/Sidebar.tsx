@@ -64,9 +64,13 @@ export default function Sidebar() {
           status: res.status,
           ok: res.ok,
         })
-        if (!res.ok) throw new Error('Failed to load properties')
 
         const data = await res.json() as { properties?: Property[] }
+        if (!res.ok) {
+          console.warn('[Sidebar] /api/properties error body', data)
+          throw new Error('Failed to load properties')
+        }
+
         const nextProperties = data.properties ?? []
 
         console.log('[Sidebar] /api/properties body', data)
