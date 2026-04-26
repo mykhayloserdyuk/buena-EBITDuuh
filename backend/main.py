@@ -8,7 +8,7 @@ from email import message_from_bytes
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from backend.voice import handle_voice_call
+from voice import handle_voice_call
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from typing import Annotated
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
