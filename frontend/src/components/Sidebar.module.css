@@ -122,7 +122,7 @@
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center top;
-  background-color: #0c0c12;
+  background-color: #ece7dc;
 }
 
 .imageOverlay {
@@ -166,20 +166,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 0 10px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  color: #182027;
-  font-size: 12px;
-  font-weight: 680;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  color: #fff;
   text-decoration: none;
   backdrop-filter: blur(10px);
 }
 
 .mapLink:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.68);
+}
+
+.mapIcon {
+  width: 18px;
+  height: 18px;
 }
 
 /* ── Current selection ── */
