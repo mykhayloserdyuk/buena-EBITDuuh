@@ -14,6 +14,8 @@ type House = {
   id: string
   name: string
   meta: string
+  unitCount?: number
+  totalArea?: number
   units: Unit[]
 }
 
@@ -21,6 +23,11 @@ type Unit = {
   id: string
   name: string
   meta: string
+  location?: string
+  kind?: string
+  area?: number
+  rooms?: number
+  ownershipShare?: number
 }
 
 const DB_NAME = process.env.MONGODB_DB ?? process.env.MONGO_DB ?? 'buena'
@@ -83,6 +90,11 @@ function unitMeta(doc: Document) {
   ].filter(Boolean)
 
   return parts.join(' · ')
+}
+
+function toNumber(value: unknown) {
+  const next = Number(value)
+  return Number.isFinite(next) ? next : undefined
 }
 
 async function loadStructuredStammdatenProperties(): Promise<Property[]> {
@@ -148,7 +160,7 @@ async function loadEntityProperties(): Promise<Property[]> {
   const unitDocs = await db
     .collection('entities')
     .find({ type: 'einheit', haus_id: { $type: 'string', $ne: '' } })
-    .project({ _id: 1, haus_id: 1, einheit_nr: 1, lage: 1, typ: 1, wohnflaeche_qm: 1, zimmer: 1 })
+    .project({ _id: 1, haus_id: 1, einheit_nr: 1, lage: 1, typ: 1, wohnflaeche_qm: 1, zimmer: 1, miteigentumsanteil: 1 })
     .sort({ haus_id: 1, einheit_nr: 1, _id: 1 })
     .toArray()
 
@@ -165,6 +177,11 @@ async function loadEntityProperties(): Promise<Property[]> {
       id: String(doc._id),
       name: unitName(doc),
       meta: unitMeta(doc),
+      location: doc.lage ? String(doc.lage) : undefined,
+      kind: doc.typ ? String(doc.typ) : undefined,
+      area: toNumber(doc.wohnflaeche_qm),
+      rooms: toNumber(doc.zimmer),
+      ownershipShare: toNumber(doc.miteigentumsanteil),
     })
     houseMap.set(houseId, house)
   }
@@ -176,6 +193,8 @@ async function loadEntityProperties(): Promise<Property[]> {
       numberLabel(house.units.length, 'Einheit', 'Einheiten'),
       house.totalArea > 0 ? `${Math.round(house.totalArea)} qm` : '',
     ].filter(Boolean).join(' · '),
+    unitCount: house.units.length,
+    totalArea: Math.round(house.totalArea),
     units: house.units,
   }))
 

@@ -15,6 +15,8 @@ type House = {
   id: string
   name: string
   meta: string
+  unitCount?: number
+  totalArea?: number
   units: Unit[]
 }
 
@@ -22,6 +24,11 @@ type Unit = {
   id: string
   name: string
   meta: string
+  location?: string
+  kind?: string
+  area?: number
+  rooms?: number
+  ownershipShare?: number
 }
 
 const suggested = [
@@ -42,7 +49,7 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
   const [selectedUnitId, setSelectedUnitId] = useState('')
   const [loadingProperties, setLoadingProperties] = useState(true)
   const [propertyError, setPropertyError] = useState('')
-  const [openMenu, setOpenMenu] = useState<'property' | 'house' | 'unit' | ''>('')
+  const [openMenu, setOpenMenu] = useState<'house' | 'unit' | ''>('')
   const ref = useRef<HTMLDivElement>(null)
 
   const selectedProperty = properties.find(p => p.id === selectedPropertyId) ?? properties[0]
@@ -121,48 +128,13 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
         <div className={styles.selectorStack}>
           <button
             className={styles.dropdownTrigger}
-            onClick={() => setOpenMenu(openMenu === 'property' ? '' : 'property')}
-            aria-expanded={openMenu === 'property'}
-            disabled={loadingProperties || properties.length === 0}
-          >
-            <span className={styles.dropdownLabel}>
-              {loadingProperties ? 'Objekte laden...' : selectedProperty?.name ?? 'Keine Objekte'}
-            </span>
-            <svg
-              className={`${styles.chevron} ${openMenu === 'property' ? styles.chevronOpen : ''}`}
-              width="14" height="14" viewBox="0 0 14 14" fill="none"
-            >
-              <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {openMenu === 'property' && (
-            <div className={styles.dropdownMenu}>
-              {properties.map(property => (
-                <button
-                  key={property.id}
-                  className={`${styles.dropdownItem} ${property.id === selectedPropertyId ? styles.dropdownItemActive : ''}`}
-                  onClick={() => {
-                    setSelectedPropertyId(property.id)
-                    setSelectedHouseId(property.houses?.[0]?.id ?? '')
-                    setSelectedUnitId(property.houses?.[0]?.units?.[0]?.id ?? '')
-                    setOpenMenu('')
-                  }}
-                >
-                  <span className={styles.dropdownItemName}>{property.name}</span>
-                  <span className={styles.dropdownItemMeta}>{property.meta}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <button
-            className={styles.dropdownTrigger}
             onClick={() => setOpenMenu(openMenu === 'house' ? '' : 'house')}
             aria-expanded={openMenu === 'house'}
-            disabled={houses.length === 0}
+            disabled={loadingProperties || houses.length === 0}
           >
-            <span className={styles.dropdownLabel}>{selectedHouse?.name ?? 'Kein Haus'}</span>
+            <span className={styles.dropdownLabel}>
+              {loadingProperties ? 'Häuser laden...' : selectedHouse?.name ?? 'Kein Haus'}
+            </span>
             <svg
               className={`${styles.chevron} ${openMenu === 'house' ? styles.chevronOpen : ''}`}
               width="14" height="14" viewBox="0 0 14 14" fill="none"
@@ -219,6 +191,12 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
               ))}
             </div>
           )}
+
+          <div className={styles.pathBox}>
+            <span className={styles.pathStep}>{selectedHouse?.name ?? 'Haus'}</span>
+            <span className={styles.pathSeparator}>/</span>
+            <span className={styles.pathCurrent}>{selectedUnit?.name ?? 'Einheit'}</span>
+          </div>
         </div>
       </div>
 
@@ -233,10 +211,37 @@ export default function Sidebar({ onSuggest }: SidebarProps) {
           <span className={styles.propertyMeta}>
             {propertyError || (
               selectedProperty
-                ? [selectedProperty.name, selectedHouse?.name, selectedUnit?.name].filter(Boolean).join(' · ')
+                ? [selectedHouse?.name, selectedUnit?.name, selectedUnit?.location].filter(Boolean).join(' · ')
                 : 'Keine Objekte gefunden'
             )}
           </span>
+        </div>
+      </div>
+
+      <div className={styles.metrics}>
+        <div className={styles.metric}>
+          <span className={styles.metricLabel}>Einheiten</span>
+          <span className={styles.metricValue}>{(selectedHouse?.unitCount ?? units.length) || '-'}</span>
+        </div>
+        <div className={styles.metric}>
+          <span className={styles.metricLabel}>Hausfläche</span>
+          <span className={styles.metricValue}>{selectedHouse?.totalArea ? `${selectedHouse.totalArea} qm` : '-'}</span>
+        </div>
+        <div className={styles.metric}>
+          <span className={styles.metricLabel}>Wohnfläche</span>
+          <span className={styles.metricValue}>{selectedUnit?.area ? `${selectedUnit.area} qm` : '-'}</span>
+        </div>
+        <div className={styles.metric}>
+          <span className={styles.metricLabel}>Zimmer</span>
+          <span className={styles.metricValue}>{selectedUnit?.rooms ?? '-'}</span>
+        </div>
+        <div className={styles.metricWide}>
+          <span className={styles.metricLabel}>Typ</span>
+          <span className={styles.metricValue}>{selectedUnit?.kind ?? '-'}</span>
+        </div>
+        <div className={styles.metricWide}>
+          <span className={styles.metricLabel}>MEA</span>
+          <span className={styles.metricValue}>{selectedUnit?.ownershipShare ?? '-'}</span>
         </div>
       </div>
 
