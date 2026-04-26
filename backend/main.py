@@ -18,7 +18,7 @@ from db import ensure_indexes
 from ingest_file import ingest
 from minio_client import list_minio_object_keys, minio_prefix_exists, read_minio_object
 
-load_dotenv(Path(__file__).parent / ".env")
+#load_dotenv(Path(__file__).parent / ".env")
 
 _RAW_DATA = os.environ.get("RAW_DATA_BUCKET", "raw-data")
 _RAW_DATA_PREFIX = os.environ.get("RAW_DATA_PREFIX", "").strip("/")
