@@ -1,4 +1,5 @@
 resources:
   - backend.yaml
   - frontend.yaml
+  - ingress.yaml
   # secrets.yaml is intentionally omitted — managed by Terraform, not Flux
