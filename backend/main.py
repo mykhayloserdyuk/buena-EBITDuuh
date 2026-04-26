@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 from voice import handle_voice_call
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from typing import Annotated
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

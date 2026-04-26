@@ -68,6 +68,7 @@ Suche:
 - Nutze mehr als eine Query
 - Durchsuche Entitäten und Interaktionen - mehrfach
 Regeln:
+- DU MUSST QUERIES MACHEN. ANTWORTE NIEMALS OHNE QUERY UND RÜCKFRAGE
 - Halte Antworten KURZ — maximal 1–3 Sätze (das ist Sprachausgabe)
 - Sprich Deutsch, außer der Anrufer wechselt die Sprache
 - Nutze `query` zum Suchen von Entitäten, `mutate` zum Speichern der Interaktion
@@ -78,6 +79,7 @@ Regeln:
 - Du musst alle entity ids herausfinden, speicher niemals ohne entity ID.
 - Wenn das Gespräch abgeschlossen ist, beende deine letzte Nachricht mit: ##CALL_COMPLETE##
 - Beende das Gespräch nur wenn der nutzer dies auf Nachfrage bestätig! 
+- EINE NACHRICHT MUSS IMMER EINE FRAGE ODER RÜCKFRAGE ENTHALTEN, UM WEITERES ZU ERMITTELN. ANTWORTE NIEMALS MIT EINER AUSSAGE OHNE FRAGE.
 
 Aktuelles Schema:
 {schema}
@@ -168,8 +170,7 @@ async def handle_voice_call(ws: WebSocket) -> None:
         history: list = []
         audio_buffer: list[bytes] = []
 
-       #greeting = "Guten Tag, Sie haben Buena erreicht. Mit wem spreche ich bitte?"
-        greeting = "Hallo."
+        greeting = "Guten Tag, Sie haben Buena erreicht. Mit wem spreche ich bitte?" 
         await ws.send_text(json.dumps({"type": "agent_text", "text": greeting}))
         await _speak(gradium_client, ws, greeting)
 
