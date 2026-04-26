@@ -49,20 +49,30 @@ function LoadingDots() {
 }
 
 function ToolChips({ toolCalls }: { toolCalls: ToolCall[] }) {
+  let seenQuery = false
   return (
     <div className={styles.toolCalls}>
-      {toolCalls.map((tc, i) => (
-        <span key={i} className={`${styles.toolChip} ${tc.status === 'running' ? styles.toolChipRunning : styles.toolChipDone}`}>
-          {tc.status === 'running' ? (
-            <span className={styles.toolSpinner} aria-hidden="true" />
-          ) : (
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-              <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-          {TOOL_LABELS[tc.name] ?? tc.name}
-        </span>
-      ))}
+      {toolCalls.map((tc, i) => {
+        let label: string
+        if (tc.name === 'query') {
+          label = seenQuery ? 'aktualisieren' : 'Datenbank abfragen'
+          seenQuery = true
+        } else {
+          label = TOOL_LABELS[tc.name] ?? tc.name
+        }
+        return (
+          <span key={i} className={`${styles.toolChip} ${tc.status === 'running' ? styles.toolChipRunning : styles.toolChipDone}`}>
+            {tc.status === 'running' ? (
+              <span className={styles.toolSpinner} aria-hidden="true" />
+            ) : (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {label}
+          </span>
+        )
+      })}
     </div>
   )
 }
