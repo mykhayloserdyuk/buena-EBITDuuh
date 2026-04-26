@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/mykhayloserdyuk/buena-backend:latest # {"$imagepolicy": "flux-system:buena-backend"}
+          image: ghcr.io/mykhayloserdyuk/buena-backend:v0.0.0 # {"$imagepolicy": "flux-system:buena-backend"}
           ports:
             - containerPort: 8000
           env:

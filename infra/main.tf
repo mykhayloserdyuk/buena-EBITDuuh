@@ -470,7 +470,7 @@ resource "kubernetes_secret" "buena_app_secrets" {
 # ---------------------------------------------------------------------------
 
 variable "pat" {
-  description = "lasserich's GitHub PAT (scopes: repo + write:packages) — used for GHCR image pulls and Flux git access."
+  description = "mysha's GitHub PAT (scopes: repo + write:packages) — used for GHCR image pulls and Flux git read access."
   type        = string
   sensitive   = true
 }
@@ -496,30 +496,6 @@ resource "kubernetes_secret" "ghcr_credentials" {
   }
 
   depends_on = [kubernetes_namespace.buena]
-}
-
-# Same secret in flux-system namespace for Flux ImageRepository pulls
-resource "kubernetes_secret" "ghcr_credentials_flux" {
-  metadata {
-    name      = "ghcr-credentials"
-    namespace = "flux-system"
-  }
-
-  type = "kubernetes.io/dockerconfigjson"
-
-  data = {
-    ".dockerconfigjson" = jsonencode({
-      auths = {
-        "ghcr.io" = {
-          username = "lasserich"
-          password = var.pat
-          auth     = base64encode("lasserich:${var.pat}")
-        }
-      }
-    })
-  }
-
-  depends_on = [helm_release.flux]
 }
 
 # Patch default service accounts to use the pull secret
@@ -572,7 +548,7 @@ resource "kubernetes_secret" "flux_github_credentials" {
     namespace = "flux-system"
   }
 
-  # lasserich's PAT — needs repo (read) + contents:write (for image tag commits)
+  # myshas's PAT — needs repo (read) scope
   # on the mykhayloserdyuk/buena-EBITDuuh repository
   data = {
     username = "lasserich"
@@ -622,11 +598,35 @@ resource "kubectl_manifest" "flux_kustomization" {
 }
 
 # ---------------------------------------------------------------------------
-# Flux image automation — ImageRepository + ImagePolicy + ImageUpdateAutomation
-# These watch GHCR for new sha-* tags and commit updated image refs back to git
+# Flux Image Automation — watches GHCR for new semver tags, patches manifests,
+# commits back to main so the Kustomization above picks up the change.
 # ---------------------------------------------------------------------------
 
-resource "kubectl_manifest" "flux_image_repo_backend" {
+# flux-system needs its own copy of the GHCR pull secret for image scanning
+resource "kubernetes_secret" "ghcr_credentials_flux" {
+  metadata {
+    name      = "ghcr-credentials"
+    namespace = "flux-system"
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = "mykhayloserdyuk"
+          password = var.pat
+          auth     = base64encode("mykhayloserdyuk:${var.pat}")
+        }
+      }
+    })
+  }
+
+  depends_on = [kubernetes_namespace.flux_system]
+}
+
+resource "kubectl_manifest" "image_repository_backend" {
   yaml_body = yamlencode({
     apiVersion = "image.toolkit.fluxcd.io/v1beta2"
     kind       = "ImageRepository"
@@ -644,7 +644,7 @@ resource "kubectl_manifest" "flux_image_repo_backend" {
   depends_on = [helm_release.flux, kubernetes_secret.ghcr_credentials_flux]
 }
 
-resource "kubectl_manifest" "flux_image_policy_backend" {
+resource "kubectl_manifest" "image_policy_backend" {
   yaml_body = yamlencode({
     apiVersion = "image.toolkit.fluxcd.io/v1beta2"
     kind       = "ImagePolicy"
@@ -654,15 +654,16 @@ resource "kubectl_manifest" "flux_image_policy_backend" {
     }
     spec = {
       imageRepositoryRef = { name = "buena-backend" }
-      filterTags = { pattern = "^sha-[a-f0-9]+" }
-      policy = { alphabetical = { order = "asc" } }
+      policy = {
+        semver = { range = ">=0.0.0" }
+      }
     }
   })
 
-  depends_on = [kubectl_manifest.flux_image_repo_backend]
+  depends_on = [kubectl_manifest.image_repository_backend]
 }
 
-resource "kubectl_manifest" "flux_image_repo_frontend" {
+resource "kubectl_manifest" "image_repository_frontend" {
   yaml_body = yamlencode({
     apiVersion = "image.toolkit.fluxcd.io/v1beta2"
     kind       = "ImageRepository"
@@ -680,7 +681,7 @@ resource "kubectl_manifest" "flux_image_repo_frontend" {
   depends_on = [helm_release.flux, kubernetes_secret.ghcr_credentials_flux]
 }
 
-resource "kubectl_manifest" "flux_image_policy_frontend" {
+resource "kubectl_manifest" "image_policy_frontend" {
   yaml_body = yamlencode({
     apiVersion = "image.toolkit.fluxcd.io/v1beta2"
     kind       = "ImagePolicy"
@@ -690,15 +691,16 @@ resource "kubectl_manifest" "flux_image_policy_frontend" {
     }
     spec = {
       imageRepositoryRef = { name = "buena-frontend" }
-      filterTags = { pattern = "^sha-[a-f0-9]+" }
-      policy = { alphabetical = { order = "asc" } }
+      policy = {
+        semver = { range = ">=0.0.0" }
+      }
     }
   })
 
-  depends_on = [kubectl_manifest.flux_image_repo_frontend]
+  depends_on = [kubectl_manifest.image_repository_frontend]
 }
 
-resource "kubectl_manifest" "flux_image_update_automation" {
+resource "kubectl_manifest" "image_update_automation" {
   yaml_body = yamlencode({
     apiVersion = "image.toolkit.fluxcd.io/v1beta1"
     kind       = "ImageUpdateAutomation"
@@ -708,23 +710,31 @@ resource "kubectl_manifest" "flux_image_update_automation" {
     }
     spec = {
       interval = "1m"
-      sourceRef = { kind = "GitRepository", name = "buena" }
+      sourceRef = {
+        kind = "GitRepository"
+        name = "buena"
+      }
       git = {
         checkout = { ref = { branch = "main" } }
         commit = {
-          author          = { name = "flux", email = "flux@buena" }
-          messageTemplate = "chore: update images to {{range .Updated.Images}}{{.}}{{end}}"
+          author = {
+            name  = "flux"
+            email = "flux@buena"
+          }
+          messageTemplate = "chore: update images to {{range .Updated.Images}}{{.}} {{end}}"
         }
         push = { branch = "main" }
       }
-      update = { strategy = "Setters", path = "./infra/k8s" }
+      update = {
+        strategy = "Setters"
+        path      = "./infra/k8s"
+      }
     }
   })
 
   depends_on = [
     kubectl_manifest.flux_git_repository,
-    kubectl_manifest.flux_image_policy_backend,
-    kubectl_manifest.flux_image_policy_frontend,
+    kubectl_manifest.image_policy_backend,
+    kubectl_manifest.image_policy_frontend,
   ]
 }
-

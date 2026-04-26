@@ -29,7 +29,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: lasserich
+          username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
       - name: Extract backend metadata
@@ -39,7 +39,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}
           tags: |
             type=raw,value=${{ github.event.inputs.nextVersion }}
-            type=sha,prefix=sha-,format=short
 
       - name: Build and push backend
         uses: docker/build-push-action@v6
@@ -63,7 +62,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: lasserich
+          username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
       - name: Extract frontend metadata
@@ -73,7 +72,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}
           tags: |
             type=raw,value=${{ github.event.inputs.nextVersion }}
-            type=sha,prefix=sha-,format=short
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
@@ -100,6 +98,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.nextVersion }}
-          name: Release ${{ github.event.inputs.nextVersion }}
+          name: ${{ github.event.inputs.nextVersion }}
           body_path: changelog.md
           token: ${{ secrets.GHCR_PAT }}
