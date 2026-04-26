@@ -1,29 +1,100 @@
 # Infrastructure
 
-GKE-based stack for `buena-EBITDuuh`. Manages a GKE cluster with MinIO (blob storage) and MongoDB, both running as Kubernetes deployments with credentials stored as K8s secrets and data persisted on GCP Persistent Disks. GitHub Actions uses a K8s ServiceAccount token to sync `raw-data/` into MinIO.
+GKE-based stack for Buena. A single `terraform apply` provisions the full production environment on Google Cloud — cluster, storage, databases, GitOps, ingress, and TLS.
 
-## What was built
+Can be bootstrapped standalone or as part of the full monorepo. See the [root README](../README.md) for the full picture.
 
-| Resource | Details |
-|---|---|
-| GKE cluster | `buena-cluster` · `europe-west3` · 1× `e2-standard-2` node |
-| Namespace | `buena` |
-| MinIO | Deployment + LoadBalancer service · API `:9000` · Console `:9001` · 10Gi PVC |
-| MongoDB | Deployment + LoadBalancer service · `:27017` · 10Gi PVC |
-| K8s secrets | `minio-credentials`, `mongo-credentials` |
-| K8s SA | `github-actions` · RBAC for pod exec / port-forward / secret read |
-| GitHub Action | `.github/workflows/sync-raw-data.yml` · triggers on `raw-data/**` push |
+---
 
-## Terraform
+## Resource map
+
+```
+Google Cloud Project: bigberlin-hack26ber-3239  (europe-west3)
+│
+└── GKE Cluster: buena-cluster
+    │
+    ├── Node Pool: buena-node-pool
+    │   └── 1× e2-standard-2  (50 GB disk)
+    │
+    ├── Namespace: ingress-nginx
+    │   └── [Helm] ingress-nginx v4.10.1
+    │       └── LoadBalancer Service  ← single external IP for all traffic
+    │
+    ├── Namespace: cert-manager
+    │   └── [Helm] cert-manager v1.15.3
+    │       └── ClusterIssuer: letsencrypt-prod  (ACME HTTP-01)
+    │
+    ├── Namespace: flux-system
+    │   ├── [Helm] flux2 v2.13.0
+    │   │   ├── image-reflector-controller
+    │   │   └── image-automation-controller
+    │   ├── GitRepository → github.com/…/buena-EBITDuuh (main)
+    │   ├── Kustomization → ./infra/k8s/
+    │   ├── ImageRepository: buena-backend  (ghcr.io)
+    │   ├── ImageRepository: buena-frontend (ghcr.io)
+    │   ├── ImagePolicy: buena-backend  (semver >=0.0.0)
+    │   ├── ImagePolicy: buena-frontend (semver >=0.0.0)
+    │   └── ImageUpdateAutomation → commits updated tags to main
+    │
+    └── Namespace: buena
+        │
+        ├── Secrets
+        │   ├── minio-credentials      (root-user / root-password)
+        │   ├── mongo-credentials      (username / password / uri)
+        │   ├── buena-app-secrets      (MODEL_PROVIDER, MODEL_NAME,
+        │   │                           GEMINI_API_KEY, MONGO_URI)
+        │   ├── ghcr-credentials       (dockerconfigjson for ghcr.io)
+        │   └── github-actions-token   (long-lived K8s SA token)
+        │
+        ├── MinIO  (object storage)
+        │   ├── Deployment: minio  (minio/minio:RELEASE.2024-11-07)
+        │   ├── Service: LoadBalancer  :9000 (API)  :9001 (console)
+        │   └── PVC: minio-data  (10 Gi)
+        │
+        ├── MongoDB  (document store)
+        │   ├── Deployment: mongo  (mongo:7.0)
+        │   ├── Service: LoadBalancer  :27017
+        │   └── PVC: mongo-data  (10 Gi)
+        │
+        ├── ServiceAccount: github-actions
+        │   ├── Role: get/list/create pods, exec, portforward, get secrets
+        │   └── RoleBinding → github-actions SA
+        │
+        └── Kustomize manifests (./k8s/)
+            ├── Deployment: backend   (FastAPI  :8000)
+            ├── Deployment: frontend  (Next.js  :3000→:80)
+            └── Ingress  → ingress-nginx → letsencrypt-prod TLS
+```
+
+---
+
+## Bootstrap
 
 ```sh
 cd infra
+cp .env.example .env
+# Fill in required variables (see .env.example)
+
 terraform init
 terraform plan
 terraform apply
 ```
 
-## Connect to the cluster locally
+**Required variables** (set in `infra/.env` as `TF_VAR_*`):
+
+| Variable | Description |
+|----------|-------------|
+| `ghcr_username` | GitHub username owning the GHCR packages |
+| `pat` | GitHub PAT with `repo` + `write:packages` scopes |
+| `gemini_api_key` | Google Gemini API key |
+| `model_provider` | `GEMINI` or `OPENAI` |
+| `model_name` | e.g. `gemini-2.0-flash` or `gpt-4o` |
+| `mongo_uri` | MongoDB connection URI |
+| `letsencrypt_email` | Email for TLS certificate notifications |
+
+---
+
+## Connect to the cluster
 
 ```sh
 gcloud container clusters get-credentials buena-cluster \
@@ -31,9 +102,11 @@ gcloud container clusters get-credentials buena-cluster \
   --project bigberlin-hack26ber-3239
 ```
 
+---
+
 ## MinIO
 
-### Retrieve credentials from the K8s secret
+### Get credentials
 
 ```sh
 kubectl get secret minio-credentials -n buena \
@@ -43,17 +116,14 @@ kubectl get secret minio-credentials -n buena \
   -o jsonpath='{.data.root-password}' | base64 -d && echo
 ```
 
-### Access the console (browser GUI)
-
-The service is a `LoadBalancer` — get the external IP and open it in a browser:
+### Access console
 
 ```sh
 kubectl get svc minio -n buena
-# Open http://<EXTERNAL-IP>:9001 in your browser
-# Login with the credentials retrieved above
+# Open http://<EXTERNAL-IP>:9001
 ```
 
-Or port-forward locally:
+Or port-forward:
 
 ```sh
 kubectl port-forward svc/minio 9000:9000 9001:9001 -n buena
@@ -61,10 +131,9 @@ kubectl port-forward svc/minio 9000:9000 9001:9001 -n buena
 # Console: http://localhost:9001
 ```
 
-### Use the MinIO CLI (`mc`)
+### Use `mc` CLI
 
 ```sh
-# Install: brew install minio/stable/mc
 MINIO_IP=$(kubectl get svc minio -n buena -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 MINIO_USER=$(kubectl get secret minio-credentials -n buena -o jsonpath='{.data.root-user}' | base64 -d)
 MINIO_PASS=$(kubectl get secret minio-credentials -n buena -o jsonpath='{.data.root-password}' | base64 -d)
@@ -73,43 +142,15 @@ mc alias set buena http://$MINIO_IP:9000 $MINIO_USER $MINIO_PASS
 mc ls buena
 ```
 
-### Persistence
-
-MinIO data is stored on a 10Gi GCP Persistent Disk via PVC `minio-data`. Data survives pod restarts and crashes.
+---
 
 ## MongoDB
 
-### Retrieve credentials from the K8s secret
+### Get credentials
 
 ```sh
-# Username
-kubectl get secret mongo-credentials -n buena \
-  -o jsonpath='{.data.username}' | base64 -d && echo
-
-# Password
-kubectl get secret mongo-credentials -n buena \
-  -o jsonpath='{.data.password}' | base64 -d && echo
-
-# Full connection URI (for use inside the cluster)
 kubectl get secret mongo-credentials -n buena \
   -o jsonpath='{.data.uri}' | base64 -d && echo
-```
-
-### Connect with MongoDB Compass (GUI)
-
-Get the external IP and connect:
-
-```sh
-kubectl get svc mongo -n buena
-# Use: mongodb://buena-admin:<password>@<EXTERNAL-IP>:27017/?authSource=admin
-```
-
-Or dynamically:
-
-```sh
-MONGO_IP=$(kubectl get svc mongo -n buena -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-MONGO_PASS=$(kubectl get secret mongo-credentials -n buena -o jsonpath='{.data.password}' | base64 -d)
-echo "mongodb://buena-admin:$MONGO_PASS@$MONGO_IP:27017/?authSource=admin"
 ```
 
 ### Connect with `mongosh`
@@ -120,65 +161,61 @@ MONGO_PASS=$(kubectl get secret mongo-credentials -n buena -o jsonpath='{.data.p
 mongosh "mongodb://buena-admin:$MONGO_PASS@$MONGO_IP:27017/buena?authSource=admin"
 ```
 
-Or port-forward locally:
+Or port-forward:
 
 ```sh
 kubectl port-forward svc/mongo 27017:27017 -n buena
 mongosh "mongodb://buena-admin:<password>@localhost:27017/buena?authSource=admin"
 ```
 
-### Connect from inside the cluster
-
-```sh
-kubectl run mongo-shell --rm -it --image=mongo:7.0 -n buena -- \
-  mongosh "$(kubectl get secret mongo-credentials -n buena \
-    -o jsonpath='{.data.uri}' | base64 -d)"
-```
-
-### Persistence
-
-MongoDB data is stored on a 10Gi GCP Persistent Disk via PVC `mongo-data`. Data survives pod restarts and crashes.
+---
 
 ## GitHub Actions — raw-data sync
 
-The workflow `.github/workflows/sync-raw-data.yml` triggers on any push to `main` that touches `raw-data/**`. It:
+The workflow `.github/workflows/sync-raw-data.yml` triggers on any push to `raw-data/**`. It authenticates to GKE via a long-lived K8s SA token, port-forwards MinIO, and mirrors `raw-data/` into the `raw-data` bucket.
 
-1. Authenticates to the GKE cluster using a long-lived K8s SA token
-2. Reads MinIO credentials from the `minio-credentials` K8s secret
-3. Port-forwards MinIO and mirrors `raw-data/` into the `raw-data` bucket
+### Required GitHub repository secrets
 
-### Retrieve the GitHub Actions SA token and CA cert
+| Secret | How to get it |
+|--------|--------------|
+| `GKE_SA_TOKEN` | `kubectl get secret github-actions-token -n buena -o jsonpath='{.data.token}' \| base64 -d` |
+| `GKE_CA_CERT` | `kubectl get secret github-actions-token -n buena -o jsonpath='{.data.ca\.crt}' \| base64 -d \| base64` |
+| `GKE_SERVER` | `kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'` |
 
-These need to be stored as GitHub repository secrets:
+---
 
-```sh
-# K8s SA token (set as GKE_SA_TOKEN in GitHub)
-kubectl get secret github-actions-token -n buena \
-  -o jsonpath='{.data.token}' | base64 -d && echo
+## GitOps flow
 
-# Cluster CA certificate (set as GKE_CA_CERT in GitHub)
-kubectl get secret github-actions-token -n buena \
-  -o jsonpath='{.data.ca\.crt}' | base64 -d | base64
-
-# Cluster API server endpoint (set as GKE_SERVER in GitHub)
-kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' && echo
+```
+Push image tag to GHCR
+        │
+        ▼
+Flux ImageReflector polls GHCR (every 1m)
+        │
+        ▼
+ImagePolicy matches new semver tag
+        │
+        ▼
+ImageUpdateAutomation commits updated tag to main
+        │
+        ▼
+Flux Kustomization syncs ./infra/k8s/ (every 1m)
+        │
+        ▼
+Deployment rolling update on GKE
 ```
 
-### Required repository secrets
-
-| Secret | Value |
-|---|---|
-| `GKE_SA_TOKEN` | Output of the token command above |
-| `GKE_CA_CERT` | Output of the CA cert command above |
-| `GKE_SERVER` | GKE API server endpoint (e.g. `https://34.179.176.221`) |
+---
 
 ## Status
 
 | Component | Status |
-|---|---|
+|-----------|--------|
 | GKE cluster | Running |
 | Node pool | Running |
-| MinIO pod | Running · persistent volume attached |
-| MongoDB pod | Running · persistent volume attached |
+| MinIO | Running · 10 Gi PVC attached |
+| MongoDB | Running · 10 Gi PVC attached |
+| Flux GitOps | Active · auto image updates enabled |
+| ingress-nginx | Running · external LoadBalancer |
+| cert-manager | Running · Let's Encrypt TLS |
 | GitHub Actions SA | Configured · RBAC for port-forward + secret read |
-| GitHub Actions workflow | Created — needs GKE_SA_TOKEN / GKE_CA_CERT / GKE_SERVER secrets configured |

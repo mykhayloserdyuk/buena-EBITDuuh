@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend
 
-## Getting Started
+Next.js 16 chat interface for Buena. Connects to the FastAPI backend for document queries, streaming responses, and file management.
 
-First, run the development server:
+Can be run standalone against any backend URL, or as part of the full stack via Docker Compose. See the [root README](../README.md) for the full picture.
 
-```bash
+---
+
+## Quickstart
+
+```sh
+cd frontend
+cp .env.local.example .env.local
+# Set BACKEND_URL=http://localhost:8000
+
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BACKEND_URL` | FastAPI backend base URL | `http://localhost:8000` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
+- **Next.js 16** · React 19 · TypeScript 5
+- **Tailwind CSS 4** for styling
+- **Streaming** — responses stream token-by-token from the backend agent
+- **File preview** — inline document rendering alongside chat
 
-To learn more about Next.js, take a look at the following resources:
+## Docker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```sh
+docker build -t buena-frontend .
+docker run -e BACKEND_URL=http://backend:8000 -p 3000:3000 buena-frontend
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production
 
-## Deploy on Vercel
+In production the frontend runs on GKE behind ingress-nginx with TLS. Image tags are managed automatically by Flux CD — push a new semver tag to GHCR and it rolls out within a minute.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`infra/README.md`](../infra/README.md) for the full deployment guide.
