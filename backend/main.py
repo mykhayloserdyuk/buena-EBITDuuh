@@ -16,10 +16,12 @@ from agent import agent
 from callbacks import _callback
 from db import ensure_indexes
 from ingest_file import ingest
+from minio_client import list_minio_object_keys, minio_prefix_exists, read_minio_object
 
 load_dotenv(Path(__file__).parent / ".env")
 
-_RAW_DATA = Path(os.environ.get("RAW_DATA_PATH", "../raw-data"))
+_RAW_DATA = os.environ.get("RAW_DATA_BUCKET", "raw-data")
+_RAW_DATA_PREFIX = os.environ.get("RAW_DATA_PREFIX", "").strip("/")
 _SKIP = {".DS_Store", "incremental_manifest.json", "stammdaten.json"}
 
 
@@ -27,7 +29,9 @@ _SKIP = {".DS_Store", "incremental_manifest.json", "stammdaten.json"}
 async def lifespan(app: FastAPI):
     ensure_indexes()
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(name)-20s %(levelname)s %(message)s"))
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(name)-20s %(levelname)s %(message)s")
+    )
     for name in ("ingest_file", "agent"):
         lg = logging.getLogger(name)
         lg.addHandler(handler)
@@ -45,16 +49,31 @@ app.add_middleware(
 )
 
 
-def _ingest_path(path: Path, source_path: str = "") -> dict:
-    return ingest(path.read_bytes(), path.name, source_path or str(path))
+def _raw_key(path: str) -> str:
+    path = path.strip("/")
+    if _RAW_DATA_PREFIX:
+        return f"{_RAW_DATA_PREFIX}/{path}" if path else _RAW_DATA_PREFIX
+    return path
 
 
-def _ingest_dir(files: list[Path], base: Path) -> list[dict]:
+def _raw_rel(key: str) -> str:
+    if _RAW_DATA_PREFIX and key.startswith(f"{_RAW_DATA_PREFIX}/"):
+        return key[len(_RAW_DATA_PREFIX) + 1 :]
+    return key
+
+
+def _ingest_path(key: str, source_path: str = "") -> dict:
+    file_bytes, _etag = read_minio_object(_RAW_DATA, key)
+    return ingest(file_bytes, Path(key).name, source_path or _raw_rel(key))
+
+
+def _ingest_dir(files: list[str]) -> list[dict]:
     results = []
     for f in files:
-        if f.name in _SKIP or f.suffix == ".json":
+        path = Path(_raw_rel(f))
+        if path.name in _SKIP or path.suffix == ".json":
             continue
-        rel = str(f.relative_to(base))
+        rel = str(path)
         logging.getLogger("ingest_file").info("--- %s ---", rel)
         results.append({"file": rel, **_ingest_path(f, rel)})
     return results
@@ -68,7 +87,9 @@ def _text(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return "".join(b["text"] for b in content if isinstance(b, dict) and "text" in b)
+        return "".join(
+            b["text"] for b in content if isinstance(b, dict) and "text" in b
+        )
     return ""
 
 
@@ -83,7 +104,9 @@ def ask(req: AskRequest):
     for msg in result["messages"]:
         if isinstance(msg, AIMessage):
             for tc in msg.tool_calls or []:
-                tool_calls.append({"tool": tc["name"], "input": tc["args"], "output": None})
+                tool_calls.append(
+                    {"tool": tc["name"], "input": tc["args"], "output": None}
+                )
         elif isinstance(msg, ToolMessage):
             for t in reversed(tool_calls):
                 if t["output"] is None:
@@ -91,7 +114,11 @@ def ask(req: AskRequest):
                     break
 
     response = next(
-        (_text(m.content) for m in reversed(result["messages"]) if isinstance(m, AIMessage) and _text(m.content)),
+        (
+            _text(m.content)
+            for m in reversed(result["messages"])
+            if isinstance(m, AIMessage) and _text(m.content)
+        ),
         "",
     )
     return {"response": response, "tool_calls": tool_calls}
@@ -147,17 +174,23 @@ async def ingest_file_endpoint(
 
 @app.post("/ingest/stammdaten")
 def ingest_stammdaten():
-    stammdaten_dir = _RAW_DATA / "stammdaten"
-    if not stammdaten_dir.exists():
-        raise HTTPException(404, f"stammdaten dir not found: {stammdaten_dir}")
-    files = sorted(stammdaten_dir.glob("*.csv"))
-    return {"results": _ingest_dir(files, _RAW_DATA)}
+    stammdaten_prefix = _raw_key("stammdaten/")
+    if not minio_prefix_exists(_RAW_DATA, stammdaten_prefix):
+        raise HTTPException(
+            404, f"stammdaten dir not found: s3://{_RAW_DATA}/{stammdaten_prefix}"
+        )
+    files = sorted(
+        f
+        for f in list_minio_object_keys(_RAW_DATA, stammdaten_prefix)
+        if Path(f).suffix == ".csv"
+    )
+    return {"results": _ingest_dir(files)}
 
 
 @app.post("/ingest/day/{day}")
 def ingest_day(day: str):
-    day_dir = _RAW_DATA / "incremental" / day
-    if not day_dir.exists():
-        raise HTTPException(404, f"day dir not found: {day_dir}")
-    files = sorted(f for f in day_dir.rglob("*") if f.is_file())
-    return {"day": day, "results": _ingest_dir(files, _RAW_DATA)}
+    day_prefix = _raw_key(f"incremental/{day}/")
+    if not minio_prefix_exists(_RAW_DATA, day_prefix):
+        raise HTTPException(404, f"day dir not found: s3://{_RAW_DATA}/{day_prefix}")
+    files = sorted(list_minio_object_keys(_RAW_DATA, day_prefix))
+    return {"day": day, "results": _ingest_dir(files)}
