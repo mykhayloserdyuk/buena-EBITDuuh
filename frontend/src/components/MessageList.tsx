@@ -3,27 +3,27 @@
 import { useEffect, useRef } from 'react'
 import styles from './MessageList.module.css'
 
+export interface ToolCall {
+  name: string
+  status: 'running' | 'done'
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   loading?: boolean
+  toolCalls?: ToolCall[]
 }
 
-interface MessageListProps {
-  messages: Message[]
+const TOOL_LABELS: Record<string, string> = {
+  query: 'Datenbank abfragen',
+  mutate: 'Daten aktualisieren',
 }
 
 function BuenaIcon() {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      fill="none"
-      viewBox="0 0 38 38"
-      aria-hidden="true"
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 38 38" aria-hidden="true">
       <path
         fill="currentColor"
         fillRule="evenodd"
@@ -37,11 +37,32 @@ function BuenaIcon() {
 function LoadingDots() {
   return (
     <span className={styles.loadingDots}>
-      <span />
-      <span />
-      <span />
+      <span /><span /><span />
     </span>
   )
+}
+
+function ToolChips({ toolCalls }: { toolCalls: ToolCall[] }) {
+  return (
+    <div className={styles.toolCalls}>
+      {toolCalls.map((tc, i) => (
+        <span key={i} className={`${styles.toolChip} ${tc.status === 'running' ? styles.toolChipRunning : styles.toolChipDone}`}>
+          {tc.status === 'running' ? (
+            <span className={styles.toolSpinner} aria-hidden="true" />
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+          {TOOL_LABELS[tc.name] ?? tc.name}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+interface MessageListProps {
+  messages: Message[]
 }
 
 export default function MessageList({ messages }: MessageListProps) {
@@ -54,9 +75,7 @@ export default function MessageList({ messages }: MessageListProps) {
   if (messages.length === 0) {
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyIcon}>
-          <BuenaIcon />
-        </div>
+        <div className={styles.emptyIcon}><BuenaIcon /></div>
         <p className={styles.emptyTitle}>Wie kann ich Ihnen helfen?</p>
         <p className={styles.emptySubtitle}>
           Stellen Sie Fragen zu Ihrer Immobilie, Mietern, Eigentümern oder Finanzen.
@@ -68,17 +87,19 @@ export default function MessageList({ messages }: MessageListProps) {
   return (
     <div className={styles.list}>
       {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={`${styles.row} ${msg.role === 'user' ? styles.rowUser : styles.rowAssistant}`}
-        >
+        <div key={msg.id} className={`${styles.row} ${msg.role === 'user' ? styles.rowUser : styles.rowAssistant}`}>
           {msg.role === 'assistant' && (
-            <div className={styles.avatar}>
-              <BuenaIcon />
-            </div>
+            <div className={styles.avatar}><BuenaIcon /></div>
           )}
-          <div className={`${styles.bubble} ${msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant}`}>
-            {msg.loading ? <LoadingDots /> : msg.content}
+          <div className={styles.assistantContent}>
+            {msg.role === 'assistant' && !!msg.toolCalls?.length && (
+              <ToolChips toolCalls={msg.toolCalls} />
+            )}
+            <div className={`${styles.bubble} ${msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant}`}>
+              {msg.loading && !msg.content && !msg.toolCalls?.some(tc => tc.status === 'running')
+                ? <LoadingDots />
+                : msg.content || null}
+            </div>
           </div>
         </div>
       ))}
