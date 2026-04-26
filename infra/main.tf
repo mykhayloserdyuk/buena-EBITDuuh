@@ -24,7 +24,7 @@ terraform {
 locals {
   project_id  = "bigberlin-hack26ber-3239"
   region      = "europe-west3"
-  github_repo = "mykhayloserdyuk/buena-EBITDuuh"
+  github_repo = "${var.ghcr_username}/buena-EBITDuuh"
 }
 
 provider "google" {
@@ -444,6 +444,16 @@ variable "gemini_api_key" {
   sensitive   = true
 }
 
+variable "model_provider" {
+  description = "LLM provider (e.g. GEMINI, OPENAI)"
+  type        = string
+}
+
+variable "model_name" {
+  description = "LLM model name (e.g. gemini-2.0-flash, gpt-4o)"
+  type        = string
+}
+
 variable "mongo_uri" {
   description = "MongoDB connection URI"
   type        = string
@@ -457,7 +467,8 @@ resource "kubernetes_secret" "buena_app_secrets" {
   }
 
   data = {
-    MODEL_PROVIDER = "GEMINI"
+    MODEL_PROVIDER = var.model_provider
+    MODEL_NAME     = var.model_name
     GEMINI_API_KEY = var.gemini_api_key
     MONGO_URI      = var.mongo_uri
   }
@@ -466,13 +477,18 @@ resource "kubernetes_secret" "buena_app_secrets" {
 }
 
 # ---------------------------------------------------------------------------
-# GHCR image pull secret — lets the cluster pull from ghcr.io/mykhayloserdyuk
+# GHCR image pull secret — lets the cluster pull from ghcr.io/${var.ghcr_username}
 # ---------------------------------------------------------------------------
 
 variable "pat" {
-  description = "mysha's GitHub PAT (scopes: repo + write:packages) — used for GHCR image pulls and Flux git read access."
+  description = "GitHub PAT (scopes: repo + write:packages) — used for GHCR image pulls and Flux git read access."
   type        = string
   sensitive   = true
+}
+
+variable "ghcr_username" {
+  description = "GitHub username that owns the PAT and the GHCR packages (set via TF_VAR_ghcr_username)."
+  type        = string
 }
 
 resource "kubernetes_secret" "ghcr_credentials" {
@@ -487,9 +503,9 @@ resource "kubernetes_secret" "ghcr_credentials" {
     ".dockerconfigjson" = jsonencode({
       auths = {
         "ghcr.io" = {
-          username = "mykhayloserdyuk"
+          username = var.ghcr_username
           password = var.pat
-          auth     = base64encode("mykhayloserdyuk:${var.pat}")
+          auth     = base64encode("${var.ghcr_username}:${var.pat}")
         }
       }
     })
@@ -548,10 +564,10 @@ resource "kubernetes_secret" "flux_github_credentials" {
     namespace = "flux-system"
   }
 
-  # myshas's PAT — needs repo (read) scope
-  # on the mykhayloserdyuk/buena-EBITDuuh repository
+  # PAT — needs repo (read) scope
+  # on the ${var.ghcr_username}/buena-EBITDuuh repository
   data = {
-    username = "lasserich"
+    username = var.ghcr_username
     password = var.pat
   }
 
@@ -615,9 +631,9 @@ resource "kubernetes_secret" "ghcr_credentials_flux" {
     ".dockerconfigjson" = jsonencode({
       auths = {
         "ghcr.io" = {
-          username = "mykhayloserdyuk"
+          username = var.ghcr_username
           password = var.pat
-          auth     = base64encode("mykhayloserdyuk:${var.pat}")
+          auth     = base64encode("${var.ghcr_username}:${var.pat}")
         }
       }
     })
@@ -635,7 +651,7 @@ resource "kubectl_manifest" "image_repository_backend" {
       namespace = "flux-system"
     }
     spec = {
-      image    = "ghcr.io/mykhayloserdyuk/buena-backend"
+      image    = "ghcr.io/${var.ghcr_username}/buena-backend"
       interval = "1m"
       secretRef = { name = "ghcr-credentials" }
     }
@@ -672,7 +688,7 @@ resource "kubectl_manifest" "image_repository_frontend" {
       namespace = "flux-system"
     }
     spec = {
-      image    = "ghcr.io/mykhayloserdyuk/buena-frontend"
+      image    = "ghcr.io/${var.ghcr_username}/buena-frontend"
       interval = "1m"
       secretRef = { name = "ghcr-credentials" }
     }

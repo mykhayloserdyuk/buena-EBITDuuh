@@ -26,6 +26,11 @@ spec:
                 secretKeyRef:
                   name: buena-app-secrets
                   key: MODEL_PROVIDER
+            - name: MODEL_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: buena-app-secrets
+                  key: MODEL_NAME
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:

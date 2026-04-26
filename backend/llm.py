@@ -5,7 +5,6 @@ import env  # loads .env and .env.infra
 _PROVIDER = os.environ["MODEL_PROVIDER"].upper()
 _MODEL = os.environ["MODEL_NAME"]
 
-
 def make_llm():
     if _PROVIDER == "GEMINI":
         from langchain_google_genai import ChatGoogleGenerativeAI
