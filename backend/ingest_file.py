@@ -112,13 +112,24 @@ def _extract(file_bytes: bytes, filename: str) -> str:
     return _extract_doc(file_bytes, filename)
 
 
-_PROMPT = """New file to ingest: {filename}
+_PROMPT = """
+<metadata>
+New file to ingest: {filename}
 Source path: {source_path}
 Raw file stored at: {raw_url}
+</metadata>
 
-Document content:
+<document_content>
 {text}
+</document_content>
 
+<ontology>
+The ontology is based on a meta model consisting of entity types, interaction types, and their attributes. 
+Each can be instantiated as entities and interactions. Both have a field "_id" and an array with string "attributes" that can be used for their instances.
+The attributes can be extended. Interactions always have cross links to "entity_ids" and "interaction_ids", which can be used to build a dynamic relational model.
+The ontology is built by you. If it is not extensive enough, you can extend it as needed.
+</ontology>
+<instructions>
 Ingest this into MongoDB:
 1. Query entity_types, interaction_types and relevant entities to understand what already exists
 2. Identify what entities and interactions this document contains and cross link them via the correct attributes
@@ -131,6 +142,7 @@ Ingest this into MongoDB:
 8. Summarize what was created or updated
 
 IMPORTANT: Only ingest the file when it is actually relevant. If there are no apparent links or if it is not even housing related, do not ingest it at all.
+</instructions>
 """
 
 

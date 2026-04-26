@@ -52,10 +52,10 @@ def mutate(command_json: str) -> str:
       {"update": "entity_types", "updates": [{"q": {"_id": "dienstleister"}, "u": {"$addToSet": {"attributes": {"$each": ["rating", "notizen"]}}}}]}
 
     Register a new interaction_type:
-      {"insert": "interaction_types", "documents": [{"_id": "kuendigung"}]}
+      {"insert": "interaction_types", "documents": [{"_id": "kuendigung", "attributes": ["entity_ids", "interaction_ids", "done", "date"]}]}
 
     Create a new interaction:
-      {"insert": "interactions", "documents": [{"_id": "KUND-00001", "type": "kuendigung", "date": "2026-04-25", "description": "...", "original": "", "done": false, "entity_ids": ["MIE-003"]}]}
+      {"insert": "interactions", "documents": [{"_id": "KUND-00001", "type": "kuendigung", "date": "2026-04-25", "description": "...", "original": "", "done": false, "entity_ids": ["MIE-003"], "interaction_ids": []}]}
 
     Mark interaction as done:
       {"update": "interactions", "updates": [{"q": {"_id": "EMAIL-06547"}, "u": {"$set": {"done": true}}}]}

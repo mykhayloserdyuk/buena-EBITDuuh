@@ -10,7 +10,7 @@ from urllib.parse import quote_plus
 
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
 from typing import Annotated
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -368,17 +368,19 @@ async def ask_stream(req: AskRequest):
     )
 
 
-@app.post("/ingest/file")
+@app.post("/ingest/file", status_code=202)
 async def ingest_file_endpoint(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_path: str = Form(default=""),
 ):
     file_bytes = await file.read()
-    return ingest(file_bytes, file.filename or "upload", source_path)
+    background_tasks.add_task(ingest, file_bytes, file.filename or "upload", source_path)
+    return {"status": "accepted"}
 
 
-@app.post("/ingest/stammdaten")
-def ingest_stammdaten():
+@app.post("/ingest/stammdaten", status_code=202)
+def ingest_stammdaten(background_tasks: BackgroundTasks):
     stammdaten_prefix = _raw_key("stammdaten/")
     if not minio_prefix_exists(_RAW_DATA, stammdaten_prefix):
         raise HTTPException(
@@ -389,16 +391,18 @@ def ingest_stammdaten():
         for f in list_minio_object_keys(_RAW_DATA, stammdaten_prefix)
         if Path(f).suffix == ".csv"
     )
-    return {"results": _ingest_dir(files)}
+    background_tasks.add_task(_ingest_dir, files)
+    return {"status": "accepted", "file_count": len(files)}
 
 
-@app.post("/ingest/day/{day}")
-def ingest_day(day: str):
+@app.post("/ingest/day/{day}", status_code=202)
+def ingest_day(day: str, background_tasks: BackgroundTasks):
     day_prefix = _raw_key(f"incremental/{day}/")
     if not minio_prefix_exists(_RAW_DATA, day_prefix):
         raise HTTPException(404, f"day dir not found: s3://{_RAW_DATA}/{day_prefix}")
     files = sorted(list_minio_object_keys(_RAW_DATA, day_prefix))
-    return {"day": day, "results": _ingest_dir(files)}
+    background_tasks.add_task(_ingest_dir, files)
+    return {"status": "accepted", "day": day, "file_count": len(files)}
 
 
 def _resolve_path(path: str) -> tuple[str, str]:

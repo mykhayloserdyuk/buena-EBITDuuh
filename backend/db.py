@@ -3,7 +3,7 @@ import os
 import env  # loads .env and .env.infra
 from pymongo import MongoClient
 
-_db = MongoClient(os.environ["MONGO_URI"])["buena"]
+_db = MongoClient(os.environ["MONGO_URI"])[os.environ.get("MONGO_DB", "buena")]
 db = _db
 
 
