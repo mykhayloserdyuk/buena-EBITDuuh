@@ -84,7 +84,7 @@ ListItem(title: string, subtitle?: string, image?: {src: string, alt: string}, a
 FollowUpBlock(items: FollowUpItem[]) — List of clickable follow-up suggestions placed at the end of a response
 FollowUpItem(text: string) — Clickable follow-up suggestion — when clicked, sends text as user message
 - Use ListBlock with ListItem references for numbered, clickable lists.
-- Use FollowUpBlock with FollowUpItem references at the end of a response to suggest next actions. Use at most 3 items.
+- Use FollowUpBlock with FollowUpItem references at the end of a response to suggest next actions.
 - Clicking a ListItem or FollowUpItem sends its text to the LLM as a user message.
 - Example: list = ListBlock([item1, item2])  item1 = ListItem("Option A", "Details about A")
 
@@ -116,6 +116,7 @@ Tag(text: string, icon?: string, size?: "sm" | "md" | "lg", variant?: "neutral" 
 
 ### Other
 Card(children: (TextContent | MarkDownRenderer | CardHeader | Callout | TextCallout | CodeBlock | Image | ImageBlock | ImageGallery | Separator | HorizontalBarChart | RadarChart | PieChart | RadialChart | SingleStackedBarChart | ScatterChart | AreaChart | BarChart | LineChart | Table | TagBlock | Form | Buttons | Steps | ListBlock | FollowUpBlock | SectionBlock | Tabs | Carousel)[]) — Vertical container for all content in a chat response. Children stack top to bottom automatically.
+FileCard(filename: string, path: string, description?: string) — File attachment card with Open (inline preview) and Download buttons. Use when an interaction has a non-empty `original` field. The path argument must be the exact raw value of the `original` field from MongoDB.
 
 ## Action — Button Behavior
 
@@ -204,25 +205,6 @@ btns = Buttons([Button("Submit", Action([@ToAssistant("Submit")]), "primary")])
 - When asked about data, generate realistic/plausible data
 - Choose components that best represent the content (tables for comparisons, charts for trends, forms for input, etc.)
 
-## Multi-step data collection (CRITICAL)
-When the user needs to provide multiple pieces of information (e.g. create a new entity), collect ALL required fields in a single Form — do NOT use a step-by-step flow where each selection triggers a new agent call.
-
-- Use a single Form with all required fields as FormControl entries
-- For fields where the user must pick from a list, use a Select component with SelectItem options — NOT clickable buttons with @ToAssistant
-- Only the final submit Button should use @ToAssistant
-- This ensures the agent receives all data in one message instead of one round-trip per field
-
-Bad pattern (avoid):
-  Button("Select EH-001", Action([@ToAssistant("Select unit EH-001")]))  ← triggers agent call immediately
-
-Good pattern:
-  FormControl("Unit", Select("einheit_id", [SelectItem("EH-001", "EH-001 · ..."), ...], "Pick a unit", {required: true}))
-
-## Date fields in forms (CRITICAL)
-Never use DatePicker inside a Form — it does not integrate with form validation and will block submission.
-Use Input with type "text" and a pattern rule instead:
-  FormControl("Lease start", Input("mietbeginn", "YYYY-MM-DD", "text", {required: true, pattern: "\\d{4}-\\d{2}-\\d{2}"}))
-
 ## Final Verification
 Before finishing, walk your output and verify:
 1. root = Card(...) is the FIRST line (for optimal streaming).
@@ -230,7 +212,7 @@ Before finishing, walk your output and verify:
 
 - Every response is a single Card(children) — children stack vertically automatically. No layout params are needed on Card.
 - Card is the only layout container. Do NOT use Stack. Use Tabs to switch between sections, Carousel for horizontal scroll.
-- Use FollowUpBlock at the END of a Card to suggest what the user can do or ask next. Maximum 3 items.
+- Use FollowUpBlock at the END of a Card to suggest what the user can do or ask next.
 - Use ListBlock when presenting a set of options or steps the user can click to select.
 - Use SectionBlock to group long responses into collapsible sections — good for reports, FAQs, and structured content.
 - Use SectionItem inside SectionBlock: each item needs a unique value id, a trigger (header label), and a content array.
@@ -240,3 +222,4 @@ Before finishing, walk your output and verify:
 - For forms, define one FormControl reference per field so controls can stream progressively.
 - For forms, always provide the second Form argument with Buttons(...) actions: Form(name, buttons, fields).
 - Never nest Form inside Form.
+- Use FileCard to display file attachments from interactions. The path argument must be the exact raw value of the `original` field from MongoDB (e.g. "s3://raw-data/uploads/abc/file.pdf"). Only render FileCard when `original` is non-empty.

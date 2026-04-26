@@ -1,13 +1,17 @@
+import asyncio
 import json
 import logging
+import mimetypes
 import os
 from contextlib import asynccontextmanager
+from email import message_from_bytes
 from pathlib import Path
 
 import env  # noqa: F401 — loads .env and .env.infra before any other local imports
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from typing import Annotated
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
@@ -15,6 +19,7 @@ from pydantic import BaseModel
 from agent import openui_agent
 from callbacks import _callback
 from db import ensure_indexes
+from email_poller import run_email_poller
 from ingest_file import ingest
 from minio_client import list_minio_object_keys, minio_prefix_exists, read_minio_object
 
@@ -32,11 +37,14 @@ async def lifespan(app: FastAPI):
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(name)-20s %(levelname)s %(message)s")
     )
-    for name in ("ingest_file", "agent"):
+    for name in ("ingest_file", "agent", "email_poller"):
         lg = logging.getLogger(name)
         lg.addHandler(handler)
         lg.setLevel(logging.INFO)
+    poller_task = asyncio.create_task(run_email_poller())
     yield
+    poller_task.cancel()
+    await asyncio.gather(poller_task, return_exceptions=True)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -44,7 +52,7 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.environ.get("CORS_ORIGIN", "*")],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
 
@@ -64,7 +72,7 @@ def _raw_rel(key: str) -> str:
 
 def _ingest_path(key: str, source_path: str = "") -> dict:
     file_bytes, _etag = read_minio_object(_RAW_DATA, key)
-    return ingest(file_bytes, Path(key).name, source_path or _raw_rel(key))
+    return ingest(file_bytes, Path(key).name, source_path or _raw_rel(key), raw_key=key)
 
 
 def _ingest_dir(files: list[str]) -> list[dict]:
@@ -196,3 +204,71 @@ def ingest_day(day: str):
         raise HTTPException(404, f"day dir not found: s3://{_RAW_DATA}/{day_prefix}")
     files = sorted(list_minio_object_keys(_RAW_DATA, day_prefix))
     return {"day": day, "results": _ingest_dir(files)}
+
+
+def _resolve_path(path: str) -> tuple[str, str]:
+    if path.startswith("s3://"):
+        without_scheme = path[5:]
+        bucket, _, key = without_scheme.partition("/")
+        return bucket, key
+    return _RAW_DATA, path
+
+
+@app.get("/files/{path:path}")
+def download_file(path: str, preview: Annotated[bool, Query()] = False):
+    bucket, key = _resolve_path(path)
+    file_bytes, _ = read_minio_object(bucket, key)
+    filename = Path(key).name
+    content_type, _ = mimetypes.guess_type(filename)
+    disposition = "inline" if preview else "attachment"
+    return Response(
+        content=file_bytes,
+        media_type=content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
+    )
+
+
+@app.get("/eml/parse")
+def parse_eml(path: Annotated[str, Query()]):
+    from ingest_file import _collect_email_parts
+
+    bucket, key = _resolve_path(path)
+    file_bytes, _ = read_minio_object(bucket, key)
+    msg = message_from_bytes(file_bytes)
+    body_lines, html_fallback, attachments = _collect_email_parts(msg, raw_html=True)
+
+    body = "\n".join(body_lines) if body_lines else (html_fallback or "")
+    is_html = not body_lines and html_fallback is not None
+
+    return {
+        "from": str(msg["from"] or ""),
+        "to": str(msg["to"] or ""),
+        "cc": str(msg["cc"] or ""),
+        "subject": str(msg["subject"] or ""),
+        "date": str(msg["date"] or ""),
+        "body": body,
+        "isHtml": is_html,
+        "attachments": [
+            {"index": i, "filename": name, "size": len(data)}
+            for i, (name, data) in enumerate(attachments)
+        ],
+    }
+
+
+@app.get("/eml/attachment")
+def get_eml_attachment(path: Annotated[str, Query()], index: Annotated[int, Query()]):
+    from ingest_file import _collect_email_parts
+
+    bucket, key = _resolve_path(path)
+    file_bytes, _ = read_minio_object(bucket, key)
+    msg = message_from_bytes(file_bytes)
+    _, _, attachments = _collect_email_parts(msg)
+    if index < 0 or index >= len(attachments):
+        raise HTTPException(404, "Attachment not found")
+    name, data = attachments[index]
+    content_type, _ = mimetypes.guess_type(name)
+    return Response(
+        content=data,
+        media_type=content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )

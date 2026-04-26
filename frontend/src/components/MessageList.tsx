@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Renderer } from '@openuidev/react-lang'
-import { openuiChatLibrary } from '@openuidev/react-ui/genui-lib'
+import { library } from '@/openui-library'
 import styles from './MessageList.module.css'
 
 export interface ToolCall {
@@ -18,6 +18,7 @@ export interface Message {
   content: string
   responseType?: 'text' | 'openui'
   loading?: boolean
+  isStreaming?: boolean
   toolCalls?: ToolCall[]
 }
 
@@ -108,8 +109,8 @@ export default function MessageList({ messages, onSend }: MessageListProps) {
             ) : msg.responseType === 'openui' ? (
               <Renderer
                 response={msg.content}
-                library={openuiChatLibrary}
-                isStreaming={false}
+                library={library}
+                isStreaming={!!msg.isStreaming}
                 onAction={e => {
                 if (e.type !== 'continue_conversation') return
                 if (e.formState && Object.keys(e.formState).length > 0) {

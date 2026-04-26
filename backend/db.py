@@ -4,6 +4,7 @@ import env  # loads .env and .env.infra
 from pymongo import MongoClient
 
 _db = MongoClient(os.environ["MONGO_URI"])["buena"]
+db = _db
 
 
 def ensure_indexes():
@@ -15,3 +16,4 @@ def ensure_indexes():
     _db["interactions"].create_index("type")
     _db["interactions"].create_index("date")
     _db["interactions"].create_index("done")
+    _db["email_seen"].create_index("ingested_at")

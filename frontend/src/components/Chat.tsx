@@ -40,41 +40,74 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const res = await fetch(`/api/ask`, {
+      const res = await fetch(`/api/ask/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: text, conversation_id: conversationId }),
       })
 
       if (!res.ok) throw new Error('Backend error')
-      const data = await res.json()
 
-      setMessages(prev => prev.map(m =>
-        m.id === replyId
-          ? {
-              ...m,
-              content: data.response,
-              responseType: data.type as 'text' | 'openui',
-              loading: false,
-              toolCalls: (data.tool_calls ?? []).map((tc: { tool: string }) => ({
-                name: tc.tool,
-                status: 'done' as const,
-              })),
-            }
-          : m
-      ))
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+
+          const event = JSON.parse(raw)
+
+          if (event.type === 'token') {
+            setMessages(prev => prev.map(m =>
+              m.id === replyId
+                ? { ...m, content: m.content + event.text, responseType: 'openui' as const, isStreaming: true }
+                : m
+            ))
+          } else if (event.type === 'tool_start') {
+            setMessages(prev => prev.map(m =>
+              m.id === replyId
+                ? { ...m, toolCalls: [...(m.toolCalls ?? []), { name: event.name, status: 'running' as const }] }
+                : m
+            ))
+          } else if (event.type === 'tool_end') {
+            setMessages(prev => prev.map(m => {
+              if (m.id !== replyId) return m
+              const toolCalls = [...(m.toolCalls ?? [])]
+              const idx = toolCalls.findLastIndex(tc => tc.name === event.name && tc.status === 'running')
+              if (idx !== -1) toolCalls[idx] = { ...toolCalls[idx], status: 'done' as const }
+              return { ...m, toolCalls }
+            }))
+          } else if (event.type === 'done') {
+            setMessages(prev => prev.map(m =>
+              m.id === replyId ? { ...m, loading: false, isStreaming: false } : m
+            ))
+          } else if (event.type === 'error') {
+            throw new Error(event.message)
+          }
+        }
+      }
     } catch {
       const demo = DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)]
       setMessages(prev => prev.map(m =>
-        m.id === replyId ? { ...m, content: demo, loading: false } : m
+        m.id === replyId ? { ...m, content: demo, loading: false, isStreaming: false } : m
       ))
     } finally {
       setMessages(prev => prev.map(m =>
-        m.id === replyId && m.loading ? { ...m, loading: false } : m
+        m.id === replyId && m.loading ? { ...m, loading: false, isStreaming: false } : m
       ))
       setLoading(false)
     }
-  }, [])
+  }, [conversationId])
 
   const handleNewChat = useCallback(() => {
     setMessages([])

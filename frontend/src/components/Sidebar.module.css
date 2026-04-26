@@ -119,8 +119,10 @@
   height: 260px;
   flex-shrink: 0;
   overflow: hidden;
-  background-size: cover;
-  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-color: #0c0c12;
 }
 
 .imageOverlay {

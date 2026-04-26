@@ -1,3 +1,4 @@
+import mimetypes
 import os
 from pathlib import Path
 
@@ -26,6 +27,18 @@ def get_minio_client():
         aws_access_key_id=user,
         aws_secret_access_key=password,
         region_name=region,
+    )
+
+
+def write_minio_object(bucket: str, key: str, data: bytes, filename: str = "") -> None:
+    content_type, _ = mimetypes.guess_type(filename or key)
+    client = get_minio_client()
+    client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=data,
+        ContentLength=len(data),
+        ContentType=content_type or "application/octet-stream",
     )
 
 
