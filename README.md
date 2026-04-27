@@ -1,4 +1,5 @@
 # Buena — Your data should grow with you.
+<img width="1722" height="993" alt="image" src="https://github.com/user-attachments/assets/32c84d5a-290d-4efc-a546-286273485dfc" />
 
 > **[buena-platform.com](https://buena-platform.com)** — AI-powered property management that learns from every document, email, and transaction you throw at it.
 
